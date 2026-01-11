@@ -95,8 +95,8 @@ RUN uv pip install --system --compile-bytecode \
     tensorrt \
     --extra-index-url https://pypi.nvidia.com
 
-# Create workspace directory
-RUN mkdir -p /workspace/ComfyUI
+# Create workspace directory (ComfyUI directory will be created by git clone)
+RUN mkdir -p /workspace
 
 # Clone ComfyUI (master branch)
 RUN cd /workspace && \
