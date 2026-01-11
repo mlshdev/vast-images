@@ -99,6 +99,6 @@ jobs:
           echo "vastai create instance <OFFER_ID> \\" >> $GITHUB_STEP_SUMMARY
           echo "  --image ${{ env.REGISTRY_GHCR }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest \\" >> $GITHUB_STEP_SUMMARY
           echo "  --env '-p 8188:8188 -p 22:22 -e COMFYUI_ARGS=\"--disable-auto-launch --port 18188 --enable-cors-header\"' \\" >> $GITHUB_STEP_SUMMARY
-          echo "  --onstart-cmd 'entrypoint.sh' \\" >> $GITHUB_STEP_SUMMARY
+          echo "  --onstart-cmd '/opt/entrypoint.sh' \\" >> $GITHUB_STEP_SUMMARY
           echo "  --disk 50 --ssh --direct" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

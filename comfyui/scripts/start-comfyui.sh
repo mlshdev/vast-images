@@ -14,16 +14,16 @@ cd "${COMFYUI_DIR}"
 source .venv/bin/activate
 
 # Wait for provisioning to complete if needed
+# The /.provisioning file is created at boot and removed after provisioning completes
 while [ -f "/.provisioning" ]; do
     echo "ComfyUI startup paused until instance provisioning has completed (/.provisioning present)"
     sleep 5
 done
 
-# Update requirements if not first boot
-if [[ ! -f /.provisioning ]]; then
-    echo "Updating ComfyUI requirements..."
-    uv pip install --quiet -r requirements.txt 2>/dev/null || true
-fi
+# Update requirements after provisioning is complete
+# This ensures dependencies stay in sync if ComfyUI was updated during provisioning
+echo "Checking ComfyUI requirements..."
+uv pip install --quiet -r requirements.txt 2>/dev/null || true
 
 echo "Starting ComfyUI with args: ${COMFYUI_ARGS}"
 

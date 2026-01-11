@@ -29,6 +29,7 @@ LABEL maintainer="mlshdev"
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV NVIDIA_DRIVER_CAPABILITIES=all
+# Ubuntu 24.04 requires this for pip to work with system Python packages
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 # Workspace configuration for vast.ai

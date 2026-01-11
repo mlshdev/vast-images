@@ -15,12 +15,18 @@ if [[ -f /opt/propagate-ssh-keys.sh ]]; then
 fi
 
 # Setup environment variables for SSH sessions
+# Export environment variables to /etc/environment for SSH sessions
+# This allows SSH users to have the same environment as the container
 if [[ -n "${CONTAINER_ID:-${VAST_CONTAINERLABEL:-${CONTAINER_LABEL:-}}}" ]]; then
     instance_identifier=$(echo "${CONTAINER_ID:-${VAST_CONTAINERLABEL:-${CONTAINER_LABEL:-}}}")
     message="# Template controlled environment for C.${instance_identifier}"
     if ! grep -q "$message" /etc/environment 2>/dev/null; then
         echo "$message" > /etc/environment
         echo 'PATH="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"' >> /etc/environment
+        # Export all environment variables (except HOME and SHLVL) to /etc/environment
+        # Using null-byte separation (-0) to handle values with newlines safely
+        # grep -z filters null-separated input, grep -E excludes HOME= and SHLVL= variables
+        # read -d '' reads null-terminated strings
         env -0 | grep -zEv "^(HOME=|SHLVL=)" | while IFS= read -r -d '' line; do
             name=${line%%=*}
             value=${line#*=}
