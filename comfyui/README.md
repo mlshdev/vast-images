@@ -380,7 +380,6 @@ ssh -p <REMAPPED_PORT> -L 8188:localhost:18188 root@<PUBLIC_IP>
 | `COMFYUI_DIR` | `/workspace/ComfyUI` | ComfyUI installation directory |
 | `COMFYUI_ARGS` | `--disable-auto-launch --enable-cors-header --port 18188` | Command line arguments passed to ComfyUI |
 | `PROVISIONING_SCRIPT` | (none) | URL to a shell script for automatic setup on first boot |
-| `DATA_DIRECTORY` | `/workspace` | Alternative data directory path |
 
 ### COMFYUI_ARGS Options
 
