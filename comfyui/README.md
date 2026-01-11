@@ -61,9 +61,11 @@ The fastest way to get started is through the Vast.ai WebUI:
 1. Go to [cloud.vast.ai](https://cloud.vast.ai)
 2. Click **"Create"** or **"Templates"**
 3. Search for GPUs with your requirements
-4. Use the image `ghcr.io/<your-username>/comfyui-cuda130:latest`
+4. Use the image `ghcr.io/mlshdev/comfyui-cuda130:latest`
 5. Set the on-start command to `/opt/entrypoint.sh`
 6. Click **"Rent"** to launch your instance
+
+> **Note**: If you forked this repository and built your own image, replace `mlshdev` with your GitHub username.
 
 ---
 
@@ -85,7 +87,7 @@ Click the **"Edit Image & Config"** button to customize your instance:
 
 | Field | Value | Description |
 |-------|-------|-------------|
-| **Image Path/Tag** | `ghcr.io/<your-username>/comfyui-cuda130:latest` | The Docker image to use. Replace `<your-username>` with your GitHub username or use the official image if published. |
+| **Image Path/Tag** | `ghcr.io/mlshdev/comfyui-cuda130:latest` | The Docker image to use. If you built your own image, replace `mlshdev` with your GitHub username. |
 | **Docker Options** | `-p 8188:8188 -p 22:22` | Port mappings for ComfyUI web interface and SSH. |
 | **Launch Mode** | `Run interactive shell server, SSH` | Recommended for SSH access with entrypoint execution. |
 | **On-start Script** | `/opt/entrypoint.sh` | The entrypoint script that initializes the container. |
@@ -167,7 +169,7 @@ Note the `ID` column from the search results - this is your `<OFFER_ID>`.
 
 ```bash
 vastai create instance <OFFER_ID> \
-  --image ghcr.io/<your-username>/comfyui-cuda130:latest \
+  --image ghcr.io/mlshdev/comfyui-cuda130:latest \
   --env '-p 8188:8188 -p 22:22' \
   --onstart-cmd '/opt/entrypoint.sh' \
   --disk 50 \
@@ -175,11 +177,13 @@ vastai create instance <OFFER_ID> \
   --direct
 ```
 
+> **Note**: If you built your own image, replace `mlshdev` with your GitHub username.
+
 ### Full Configuration with All Options
 
 ```bash
 vastai create instance <OFFER_ID> \
-  --image ghcr.io/<your-username>/comfyui-cuda130:latest \
+  --image ghcr.io/mlshdev/comfyui-cuda130:latest \
   --env '-p 8188:8188 -p 22:22 \
          -e COMFYUI_ARGS="--disable-auto-launch --port 18188 --enable-cors-header" \
          -e WORKSPACE=/workspace \
@@ -217,7 +221,7 @@ vastai search offers 'gpu_ram >= 16' -o 'dph+'
 
 # Create instance with new volume
 vastai create instance <OFFER_ID> \
-  --image ghcr.io/<your-username>/comfyui-cuda130:latest \
+  --image ghcr.io/mlshdev/comfyui-cuda130:latest \
   --env '-p 8188:8188 -p 22:22 \
          -e COMFYUI_ARGS="--disable-auto-launch --port 18188 --enable-cors-header"' \
   --onstart-cmd '/opt/entrypoint.sh' \
@@ -275,7 +279,7 @@ vastai ssh-url <INSTANCE_ID>
 |----------|-----------------|
 | Basic SD 1.5/SDXL workflows | 50-100 GB |
 | FLUX models + LoRAs | 100-200 GB |
-| Video generation (Wan, Mochi) | 200-500 GB |
+| Video generation (Wan 2.x, Mochi, LTX-Video) | 200-500 GB |
 | Large model collection | 500+ GB |
 
 ### Setting Up with Volume (WebUI)
@@ -290,7 +294,7 @@ vastai ssh-url <INSTANCE_ID>
 ```bash
 # The volume mount path should match the WORKSPACE environment variable
 vastai create instance <OFFER_ID> \
-  --image ghcr.io/<your-username>/comfyui-cuda130:latest \
+  --image ghcr.io/mlshdev/comfyui-cuda130:latest \
   --env '-p 8188:8188 -p 22:22 -e WORKSPACE=/workspace' \
   --onstart-cmd '/opt/entrypoint.sh' \
   --disk 50
@@ -409,9 +413,11 @@ Common arguments you can use:
 When configuring ports, use the format `-p EXTERNAL:INTERNAL`:
 
 ```bash
--p 8188:8188   # Map external 8188 to internal 8188 (ComfyUI will listen on 18188 and proxy)
--p 22:22       # SSH (Vast.ai will remap this automatically)
+-p 8188:8188   # Expose port 8188 externally (Vast.ai may remap this to a different port)
+-p 22:22       # SSH (Vast.ai will remap this to a random external port)
 ```
+
+> **Note**: ComfyUI listens on internal port 18188 by default. The Docker image handles the mapping between external port 8188 and internal port 18188.
 
 ### Accessing ComfyUI
 
@@ -463,14 +469,16 @@ echo "Provisioning complete!"
 
 **WebUI**: Add to Environment Variables:
 ```
-PROVISIONING_SCRIPT=https://raw.githubusercontent.com/your-user/your-repo/main/provisioning.sh
+PROVISIONING_SCRIPT=https://gist.githubusercontent.com/YOUR_USERNAME/GIST_ID/raw/provisioning.sh
 ```
+
+> **Tip**: Create a GitHub Gist with your provisioning script and use the raw URL. This makes it easy to update your script without rebuilding the image.
 
 **CLI**:
 ```bash
 vastai create instance <OFFER_ID> \
-  --image ghcr.io/<your-username>/comfyui-cuda130:latest \
-  --env '-p 8188:8188 -p 22:22 -e PROVISIONING_SCRIPT=https://example.com/setup.sh' \
+  --image ghcr.io/mlshdev/comfyui-cuda130:latest \
+  --env '-p 8188:8188 -p 22:22 -e PROVISIONING_SCRIPT=https://gist.githubusercontent.com/YOUR_USERNAME/GIST_ID/raw/setup.sh' \
   --onstart-cmd '/opt/entrypoint.sh' \
   --disk 100
 ```
