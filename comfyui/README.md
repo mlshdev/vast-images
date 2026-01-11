@@ -88,7 +88,7 @@ Click the **"Edit Image & Config"** button to customize your instance:
 | Field | Value | Description |
 |-------|-------|-------------|
 | **Image Path/Tag** | `ghcr.io/mlshdev/comfyui-cuda130:latest` | The Docker image to use. If you built your own image, replace `mlshdev` with your GitHub username. |
-| **Docker Options** | `-p 8188:8188 -p 22:22` | Port mappings for ComfyUI web interface and SSH. |
+| **Docker Options** | `-p 8188:18188 -p 22:22` | Port mappings for ComfyUI web interface (external:internal) and SSH. |
 | **Launch Mode** | `Run interactive shell server, SSH` | Recommended for SSH access with entrypoint execution. |
 | **On-start Script** | `/opt/entrypoint.sh` | The entrypoint script that initializes the container. |
 
@@ -170,7 +170,7 @@ Note the `ID` column from the search results - this is your `<OFFER_ID>`.
 ```bash
 vastai create instance <OFFER_ID> \
   --image ghcr.io/mlshdev/comfyui-cuda130:latest \
-  --env '-p 8188:8188 -p 22:22' \
+  --env '-p 8188:18188 -p 22:22' \
   --onstart-cmd '/opt/entrypoint.sh' \
   --disk 50 \
   --ssh \
@@ -184,7 +184,7 @@ vastai create instance <OFFER_ID> \
 ```bash
 vastai create instance <OFFER_ID> \
   --image ghcr.io/mlshdev/comfyui-cuda130:latest \
-  --env '-p 8188:8188 -p 22:22 \
+  --env '-p 8188:18188 -p 22:22 \
          -e COMFYUI_ARGS="--disable-auto-launch --port 18188 --enable-cors-header" \
          -e WORKSPACE=/workspace \
          -e PROVISIONING_SCRIPT=https://raw.githubusercontent.com/user/repo/main/setup.sh' \
@@ -222,7 +222,7 @@ vastai search offers 'gpu_ram >= 16' -o 'dph+'
 # Create instance with new volume
 vastai create instance <OFFER_ID> \
   --image ghcr.io/mlshdev/comfyui-cuda130:latest \
-  --env '-p 8188:8188 -p 22:22 \
+  --env '-p 8188:18188 -p 22:22 \
          -e COMFYUI_ARGS="--disable-auto-launch --port 18188 --enable-cors-header"' \
   --onstart-cmd '/opt/entrypoint.sh' \
   --disk 50
@@ -295,7 +295,7 @@ vastai ssh-url <INSTANCE_ID>
 # The volume mount path should match the WORKSPACE environment variable
 vastai create instance <OFFER_ID> \
   --image ghcr.io/mlshdev/comfyui-cuda130:latest \
-  --env '-p 8188:8188 -p 22:22 -e WORKSPACE=/workspace' \
+  --env '-p 8188:18188 -p 22:22 -e WORKSPACE=/workspace' \
   --onstart-cmd '/opt/entrypoint.sh' \
   --disk 50
 ```
@@ -403,27 +403,35 @@ Common arguments you can use:
 
 ### Internal vs External Ports
 
-| Service | Internal Port | Default External Port | Description |
-|---------|--------------|----------------------|-------------|
-| ComfyUI | 18188 | 8188 | ComfyUI web interface |
-| SSH | 22 | Remapped by Vast.ai | SSH access |
+| Service | Default Internal Port | Description |
+|---------|----------------------|-------------|
+| ComfyUI | 18188 | ComfyUI web interface (configurable via `COMFYUI_ARGS`) |
+| SSH | 22 | SSH access |
 
 ### Port Mapping in Docker
 
-When configuring ports, use the format `-p EXTERNAL:INTERNAL`:
+ComfyUI listens on port **18188** by default. When configuring your instance, map your desired external port to 18188:
 
 ```bash
--p 8188:8188   # Expose port 8188 externally (Vast.ai may remap this to a different port)
--p 22:22       # SSH (Vast.ai will remap this to a random external port)
+# Map external port 8188 to ComfyUI's internal port 18188
+-p 8188:18188
+
+# SSH port (Vast.ai will remap this to a random external port)
+-p 22:22
 ```
 
-> **Note**: ComfyUI listens on internal port 18188 by default. The Docker image handles the mapping between external port 8188 and internal port 18188.
+**Alternative**: You can change the port ComfyUI listens on via the `COMFYUI_ARGS` environment variable:
+
+```bash
+# Have ComfyUI listen on port 8188 directly
+-e COMFYUI_ARGS="--disable-auto-launch --port 8188 --enable-cors-header"
+```
 
 ### Accessing ComfyUI
 
 1. **Via Vast.ai Dashboard**: Click **"Open"** on your instance or access the remapped port shown in the instance details
-2. **Via Direct IP**: `http://PUBLIC_IP:8188` (where 8188 is the external port, may be remapped)
-3. **Via SSH Tunnel**: Forward port 18188 locally for direct access
+2. **Via Direct IP**: `http://PUBLIC_IP:PORT` (where PORT is your mapped external port, may be remapped by Vast.ai)
+3. **Via SSH Tunnel**: Forward port 18188 (or your configured port) locally for direct access
 
 ---
 
@@ -478,7 +486,7 @@ PROVISIONING_SCRIPT=https://gist.githubusercontent.com/YOUR_USERNAME/GIST_ID/raw
 ```bash
 vastai create instance <OFFER_ID> \
   --image ghcr.io/mlshdev/comfyui-cuda130:latest \
-  --env '-p 8188:8188 -p 22:22 -e PROVISIONING_SCRIPT=https://gist.githubusercontent.com/YOUR_USERNAME/GIST_ID/raw/setup.sh' \
+  --env '-p 8188:18188 -p 22:22 -e PROVISIONING_SCRIPT=https://gist.githubusercontent.com/YOUR_USERNAME/GIST_ID/raw/setup.sh' \
   --onstart-cmd '/opt/entrypoint.sh' \
   --disk 100
 ```
