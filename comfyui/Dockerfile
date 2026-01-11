@@ -29,15 +29,12 @@ LABEL maintainer="mlshdev"
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV NVIDIA_DRIVER_CAPABILITIES=all
-# Ubuntu 24.04 requires this for pip to work with system Python packages
-ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 # Workspace configuration for vast.ai
 ENV DATA_DIRECTORY=/workspace
 ENV WORKSPACE=/workspace
 
-# UV configuration
-ENV UV_SYSTEM_PYTHON=1
+# UV configuration - removed UV_SYSTEM_PYTHON since we use venv
 ENV UV_NO_CACHE=1
 ENV UV_LINK_MODE=copy
 
@@ -85,16 +82,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 \
     && ln -sf /usr/bin/python3.12 /usr/bin/python
 
-# Install PyTorch with CUDA 13.0 nightly (system-wide, optimized)
-RUN uv pip install --system --compile-bytecode \
-    --pre torch torchvision torchaudio \
-    --index-url https://download.pytorch.org/whl/nightly/cu130
-
-# Install TensorRT (system-wide, optimized)
-RUN uv pip install --system --compile-bytecode \
-    tensorrt \
-    --extra-index-url https://pypi.nvidia.com
-
 # Create workspace directory (ComfyUI directory will be created by git clone)
 RUN mkdir -p /workspace
 
@@ -104,9 +91,25 @@ RUN cd /workspace && \
     cd ComfyUI && \
     git checkout master
 
-# Create and setup ComfyUI venv using uv
+# Create ComfyUI venv and install PyTorch with CUDA 13.0 nightly
 RUN cd /workspace/ComfyUI && \
     uv venv .venv --python 3.12 && \
+    . .venv/bin/activate && \
+    uv pip install --compile-bytecode \
+        --pre torch torchvision torchaudio \
+        --index-url https://download.pytorch.org/whl/nightly/cu130 && \
+    deactivate
+
+# Install TensorRT into the venv
+RUN cd /workspace/ComfyUI && \
+    . .venv/bin/activate && \
+    uv pip install --compile-bytecode \
+        tensorrt \
+        --extra-index-url https://pypi.nvidia.com && \
+    deactivate
+
+# Install ComfyUI requirements into the venv
+RUN cd /workspace/ComfyUI && \
     . .venv/bin/activate && \
     uv pip install --compile-bytecode -r requirements.txt && \
     deactivate
