@@ -425,6 +425,8 @@ Use provisioning scripts to automatically set up models and configurations on fi
 2. On first boot, the entrypoint downloads and executes the script
 3. A marker file (`/.provisioning_complete`) prevents re-running on subsequent boots
 
+> **Security Note**: Always use HTTPS URLs for provisioning scripts and only point to URLs you control and trust. The container will display a warning if a non-HTTPS URL is used.
+
 ### Example Provisioning Script
 
 ```bash
