@@ -70,7 +70,8 @@ for user_home in /home/*; do
 
     # Check and add root's keys to user
     while IFS= read -r key || [ -n "$key" ]; do
-        if [[ -n "$key" ]] && ! key_exists "$key" "$user_auth_keys"; then
+        # Skip empty or whitespace-only keys
+        if [[ -n "$key" && ! "$key" =~ ^[[:space:]]*$ ]] && ! key_exists "$key" "$user_auth_keys"; then
             echo "$key" >> "$user_auth_keys"
             echo "Added SSH key for $username"
         fi

@@ -47,11 +47,19 @@ if [[ ! -f /etc/ssh/ssh_host_ed25519_key ]]; then
 fi
 
 # Execute provisioning script if provided
+# SECURITY NOTE: This feature is designed for vast.ai users to customize their instances.
+# Users should only set PROVISIONING_SCRIPT to URLs they control and trust.
+# Consider using HTTPS URLs and hosting scripts in trusted repositories.
 if [[ -n "${PROVISIONING_SCRIPT:-}" && ! -f /.provisioning_complete ]]; then
     echo "Running provisioning script from ${PROVISIONING_SCRIPT}"
-    curl -Lo /tmp/provisioning.sh "$PROVISIONING_SCRIPT"
+    # Validate URL starts with https:// for security (warn if not)
+    if [[ ! "${PROVISIONING_SCRIPT}" =~ ^https:// ]]; then
+        echo "WARNING: Provisioning script URL is not using HTTPS. This is less secure."
+    fi
+    curl -fsSL -o /tmp/provisioning.sh "$PROVISIONING_SCRIPT"
     chmod +x /tmp/provisioning.sh
     /tmp/provisioning.sh || echo "Provisioning script encountered errors"
+    rm -f /tmp/provisioning.sh
     touch /.provisioning_complete
 fi
 

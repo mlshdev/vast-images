@@ -115,13 +115,13 @@ RUN cd /workspace/facefusion && \
     # Modify core.py to skip hash verification
     sed -i "s/return all(module.pre_check() for module in common_modules) and content_analyser_hash == 'b14e7b92'/# RESEARCH MODE: Skip hash check for modified content_analyser\n\treturn all(module.pre_check() for module in common_modules)/" facefusion/core.py
 
-# Create FaceFusion venv and install PyTorch with CUDA
+# Create FaceFusion venv and install PyTorch with CUDA 13.0 nightly
 RUN cd /workspace/facefusion && \
     uv venv .venv --python 3.12 && \
     . .venv/bin/activate && \
     uv pip install --compile-bytecode \
-        torch torchvision torchaudio \
-        --index-url https://download.pytorch.org/whl/cu126 && \
+        --pre torch torchvision torchaudio \
+        --index-url https://download.pytorch.org/whl/nightly/cu130 && \
     deactivate
 
 # Install TensorRT into the venv (as specified in requirements)
