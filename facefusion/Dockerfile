@@ -208,6 +208,9 @@ RUN curl -fSL -o /workspace/facefusion/.assets/models/arcface_w600k_r50.hash \
         "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/arcface_w600k_r50.onnx"
 
 # Face Masker: xseg_1 (occlusion model) and bisenet_resnet_34 (parser model)
+# Note: Different model versions are used as specified by FaceFusion's face_masker.py
+# - xseg_1 is from models-3.1.0
+# - bisenet_resnet_34 is from models-3.0.0
 RUN curl -fSL -o /workspace/facefusion/.assets/models/xseg_1.hash \
         "https://github.com/facefusion/facefusion-assets/releases/download/models-3.1.0/xseg_1.hash" && \
     curl -fSL -o /workspace/facefusion/.assets/models/xseg_1.onnx \
