@@ -80,7 +80,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./facefusion
+          context: .
           file: ./facefusion/Dockerfile
           push: ${{ github.event.inputs.push_image != 'false' }}
           tags: ${{ steps.meta.outputs.tags }}
