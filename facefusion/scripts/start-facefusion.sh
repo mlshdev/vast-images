@@ -6,7 +6,7 @@
 set -e
 
 FACEFUSION_DIR="${FACEFUSION_DIR:-/workspace/facefusion}"
-FACEFUSION_ARGS="${FACEFUSION_ARGS:---open-browser=false --server-name 0.0.0.0 --server-port 17860}"
+FACEFUSION_ARGS="${FACEFUSION_ARGS:---server-name 0.0.0.0 --server-port 17860}"
 
 cd "${FACEFUSION_DIR}"
 

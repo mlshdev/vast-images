@@ -105,7 +105,7 @@ Add these environment variables in the **"Environment Variables"** section:
 
 | Variable | Example Value | Required | Description |
 |----------|---------------|----------|-------------|
-| `FACEFUSION_ARGS` | `--open-browser=false --server-name 0.0.0.0 --server-port 17860` | No | Command line arguments for FaceFusion. Default is shown. |
+| `FACEFUSION_ARGS` | `--server-name 0.0.0.0 --server-port 17860` | No | Command line arguments for FaceFusion. Default is shown. |
 | `WORKSPACE` | `/workspace` | No | Base workspace directory. Default: `/workspace` |
 | `PROVISIONING_SCRIPT` | `https://raw.githubusercontent.com/user/repo/main/setup.sh` | No | URL to a shell script for automatic model/extension setup |
 
@@ -200,7 +200,7 @@ vastai create instance <OFFER_ID> \
 vastai create instance <OFFER_ID> \
   --image ghcr.io/mlshdev/facefusion-cuda130:latest \
   --env '-p 7860:17860 -p 22:22 \
-         -e FACEFUSION_ARGS="--open-browser=false --server-name 0.0.0.0 --server-port 17860" \
+         -e FACEFUSION_ARGS="--server-name 0.0.0.0 --server-port 17860" \
          -e WORKSPACE=/workspace \
          -e PROVISIONING_SCRIPT=https://raw.githubusercontent.com/user/repo/main/setup.sh' \
   --onstart-cmd '/opt/entrypoint.sh' \
@@ -367,7 +367,7 @@ ssh -p <REMAPPED_PORT> -L 7860:localhost:17860 root@<PUBLIC_IP>
 |----------|---------|-------------|
 | `WORKSPACE` | `/workspace` | Base workspace directory for FaceFusion and data |
 | `FACEFUSION_DIR` | `/workspace/facefusion` | FaceFusion installation directory |
-| `FACEFUSION_ARGS` | `--open-browser=false --server-name 0.0.0.0 --server-port 17860` | Command line arguments passed to FaceFusion |
+| `FACEFUSION_ARGS` | `--server-name 0.0.0.0 --server-port 17860` | Command line arguments passed to FaceFusion |
 | `PROVISIONING_SCRIPT` | (none) | URL to a shell script for automatic setup on first boot |
 
 ### FACEFUSION_ARGS Options
@@ -378,7 +378,7 @@ Common arguments you can use:
 |----------|-------------|
 | `--server-port PORT` | Port for FaceFusion web server (internal). Default: `17860` |
 | `--server-name IP` | IP address to listen on. Default: `0.0.0.0` |
-| `--open-browser=false` | Don't open browser on startup (required for server use) |
+| `--open-browser` | Open browser on startup (omit this flag for server use) |
 | `--execution-providers cuda` | Use CUDA for GPU acceleration |
 | `--execution-providers tensorrt` | Use TensorRT for optimized inference |
 | `--execution-thread-count N` | Number of execution threads |

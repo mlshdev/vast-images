@@ -41,7 +41,7 @@ ENV UV_LINK_MODE=copy
 
 # FaceFusion configuration
 ENV FACEFUSION_DIR=/workspace/facefusion
-ENV FACEFUSION_ARGS="--open-browser=false --server-name 0.0.0.0 --server-port 17860"
+ENV FACEFUSION_ARGS="--server-name 0.0.0.0 --server-port 17860"
 
 # Copy uv binary from distroless image
 COPY --from=uv-source /uv /usr/local/bin/uv
