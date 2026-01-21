@@ -1,4 +1,4 @@
-name: Build and Push FaceFusion Image
+name: Build and Push FaceFusion Image (selfhosted)
 
 on:
   workflow_dispatch:
