@@ -43,7 +43,7 @@ ENV UV_LINK_MODE=copy
 # These are the recommended way to configure Gradio-based applications
 ENV FACEFUSION_DIR=/workspace/facefusion
 ENV GRADIO_SERVER_NAME=0.0.0.0
-ENV GRADIO_SERVER_PORT=7860
+ENV GRADIO_SERVER_PORT=17860
 
 # FaceFusion CLI arguments (for execution provider and other settings)
 # Note: Server settings are configured via GRADIO_* environment variables above
@@ -57,7 +57,7 @@ ENV CLOUDFLARE_METRICS="localhost:11113"
 # Default PORTAL_CONFIG for FaceFusion - configure applications for Instance Portal
 # Format: hostname:external_port:internal_port:path:name
 # external_port != internal_port means Caddy will act as reverse proxy
-ENV PORTAL_CONFIG="localhost:1111:11111:/:Instance Portal|localhost:7860:7860:/:FaceFusion"
+ENV PORTAL_CONFIG="localhost:1111:11111:/:Instance Portal|localhost:7860:17860:/:FaceFusion"
 
 # Copy uv binary from distroless image
 COPY --from=uv-source /uv /usr/local/bin/uv
