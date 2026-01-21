@@ -40,7 +40,7 @@ fi
 
 # Generate authentication token for Instance Portal if not set
 if [[ -z "${OPEN_BUTTON_TOKEN:-}" ]]; then
-    export OPEN_BUTTON_TOKEN=$(cat /proc/sys/kernel/random/uuid | tr -d '-' | head -c 32)
+    export OPEN_BUTTON_TOKEN=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
     echo "OPEN_BUTTON_TOKEN=\"${OPEN_BUTTON_TOKEN}\"" >> /etc/environment
 fi
 
@@ -74,8 +74,11 @@ fi
 
 # Start Instance Portal components in background
 # This launches Caddy (reverse proxy), tunnel manager, and portal UI
+# The launch.sh script handles its own process management and cleanup
 echo "Starting Instance Portal components..."
 /opt/portal-aio/launch.sh &
+PORTAL_PID=$!
+echo "Instance Portal started with PID: $PORTAL_PID"
 
 # Start supervisor in the foreground (manages FaceFusion and SSHD)
 exec /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf
