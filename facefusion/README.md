@@ -1,6 +1,6 @@
 # FaceFusion Docker Image for Vast.ai
 
-Custom Docker image for running [FaceFusion](https://github.com/facefusion/facefusion) on [Vast.ai](https://vast.ai) cloud GPU platform with CUDA 13.0.2 and TensorRT support.
+Custom Docker image for running [FaceFusion](https://github.com/facefusion/facefusion) on [Vast.ai](https://vast.ai) cloud GPU platform with CUDA 12.9.1 and TensorRT support.
 
 **Research Edition**: This image has NSFW detection disabled for educational and research purposes.
 
@@ -8,27 +8,36 @@ Custom Docker image for running [FaceFusion](https://github.com/facefusion/facef
 
 1. [Features](#features)
 2. [Quick Start](#quick-start)
-3. [Setup via Vast.ai WebUI](#setup-via-vastai-webui)
-4. [Setup via vast-cli](#setup-via-vast-cli)
-5. [Workspace Volume Configuration](#workspace-volume-configuration)
-6. [SSH Access & Port Remapping](#ssh-access--port-remapping)
-7. [Environment Variables](#environment-variables)
-8. [Ports Reference](#ports-reference)
-9. [Dynamic Provisioning](#dynamic-provisioning)
-10. [Directory Structure](#directory-structure)
-11. [AWS S3 Integration](#aws-s3-integration)
-12. [Service Management](#service-management)
-13. [Building](#building)
-14. [Research Mode Notes](#research-mode-notes)
-15. [Troubleshooting](#troubleshooting)
-16. [License](#license)
+3. [Accessing FaceFusion WebUI](#accessing-facefusion-webui)
+   - [Method 1: Instance Portal with Cloudflare Tunnels (Recommended)](#method-1-instance-portal-with-cloudflare-tunnels-recommended)
+   - [Method 2: Direct IP:PORT Access](#method-2-direct-ipport-access)
+   - [Method 3: SSH Port Forwarding](#method-3-ssh-port-forwarding)
+   - [Method 4: Gradio Share Mode](#method-4-gradio-share-mode)
+4. [Setup via Vast.ai WebUI](#setup-via-vastai-webui)
+5. [Setup via vast-cli](#setup-via-vast-cli)
+6. [Workspace Volume Configuration](#workspace-volume-configuration)
+7. [SSH Access & Port Remapping](#ssh-access--port-remapping)
+8. [Environment Variables](#environment-variables)
+9. [FaceFusion Run Parameters](#facefusion-run-parameters)
+10. [Ports Reference](#ports-reference)
+11. [Dynamic Provisioning](#dynamic-provisioning)
+12. [Directory Structure](#directory-structure)
+13. [AWS S3 Integration](#aws-s3-integration)
+14. [Service Management](#service-management)
+15. [Building](#building)
+16. [Research Mode Notes](#research-mode-notes)
+17. [Troubleshooting](#troubleshooting)
+18. [Useful Links](#useful-links)
+19. [License](#license)
 
 ---
 
 ## Features
 
-- **Base Image**: NVIDIA CUDA 13.0.2 runtime on Ubuntu 24.04
-- **Package Manager**: [uv](https://github.com/astral-sh/uv) - Fast Python package installer (sourced from distroless image)
+- **Base Image**: NVIDIA CUDA 12.9.1 with cuDNN runtime on Ubuntu 24.04
+- **Instance Portal**: Built-in web portal for easy application access and management
+- **Cloudflare Tunnels**: Automatic secure HTTPS tunnels for accessing FaceFusion from anywhere
+- **Package Manager**: [uv](https://github.com/astral-sh/uv) - Fast Python package installer
 - **AWS CLI**: Pre-installed AWS CLI v2 for S3 and other AWS service integrations
 - **AWS Mountpoint S3**: Pre-installed for mounting S3 buckets as local filesystems
 - **FaceFusion**: Latest master branch with virtual environment
@@ -48,11 +57,13 @@ Custom Docker image for running [FaceFusion](https://github.com/facefusion/facef
 - openssh-server/client (SSH access)
 - htop (system monitoring)
 - supervisor (process management)
+- cloudflared (Cloudflare tunnel client)
+- caddy (reverse proxy server)
 
 ### Pre-installed Python Packages
 
 In the FaceFusion virtual environment:
-- PyTorch with CUDA support
+- PyTorch with CUDA 12.9 support
 - torchvision, torchaudio
 - TensorRT 10.12.0.36
 - onnxruntime-gpu 1.23.2
@@ -67,12 +78,123 @@ The fastest way to get started is through the Vast.ai WebUI:
 1. Go to [cloud.vast.ai](https://cloud.vast.ai)
 2. Click **"Create"** or **"Templates"**
 3. Search for GPUs with your requirements
-4. Use the image `ghcr.io/mlshdev/facefusion-cuda130:latest`
+4. Use the image `ghcr.io/mlshdev/facefusion:latest`
 5. Set the on-start command to `/opt/entrypoint.sh`
-6. Configure port mapping: `-p 7860:17860`
+6. Configure port mapping: `-p 1111:1111 -p 7860:7860`
 7. Click **"Rent"** to launch your instance
+8. Click **"Open"** to access the Instance Portal and FaceFusion
 
 > **Note**: If you forked this repository and built your own image, replace `mlshdev` with your GitHub username.
+
+---
+
+## Accessing FaceFusion WebUI
+
+This image provides multiple methods to access the FaceFusion web interface. Choose the method that best fits your needs.
+
+### Method 1: Instance Portal with Cloudflare Tunnels (Recommended)
+
+The Instance Portal automatically creates secure Cloudflare tunnels for all configured ports. This is the **recommended method** as it provides:
+- Secure HTTPS access from anywhere
+- No firewall configuration needed
+- Automatic token-based authentication
+- Easy-to-remember URLs (e.g., `https://four-random-words.trycloudflare.com`)
+
+**How to use:**
+
+1. After your instance starts, click the **"Open"** button on your instance card
+2. The Instance Portal will load and show available applications
+3. Click **"Launch Application"** next to FaceFusion
+4. A new tab will open with your FaceFusion web interface
+
+The Instance Portal automatically:
+- Creates a Cloudflare tunnel for port 7860 (FaceFusion)
+- Appends an authentication token to the URL
+- Provides direct links to both tunnel and direct IP access
+
+**Managing Tunnels:**
+
+You can also create additional tunnels for ports you start later:
+1. Go to the **"Tunnels"** page in the Instance Portal
+2. Enter the local URL (e.g., `http://localhost:8080`)
+3. Click **"Create New Tunnel"**
+
+### Method 2: Direct IP:PORT Access
+
+Access FaceFusion directly using the instance's public IP and mapped external port.
+
+**How to use:**
+
+1. Find your mapped port:
+   - Click the **"IP Port Info"** button on your instance card
+   - Look for the mapping to port 7860 (e.g., `65.130.162.74:33526 -> 7860/tcp`)
+2. Open your browser and navigate to: `http://PUBLIC_IP:EXTERNAL_PORT`
+
+**Example:**
+```
+http://65.130.162.74:33526
+```
+
+**Limitations:**
+- Requires the port to be opened in your template configuration
+- May be blocked by corporate firewalls
+- No HTTPS (unless you configure it separately)
+
+### Method 3: SSH Port Forwarding
+
+Forward FaceFusion's port through SSH to access it locally on your machine.
+
+**How to use:**
+
+1. Get your SSH connection details from the Vast.ai dashboard
+2. Connect with port forwarding:
+   ```bash
+   ssh -p <SSH_PORT> -L 7860:localhost:7860 root@<PUBLIC_IP>
+   ```
+3. Open your browser and navigate to: `http://localhost:7860`
+
+**Example:**
+```bash
+# Forward FaceFusion to your local machine
+ssh -p 23456 -L 7860:localhost:7860 root@65.130.162.74
+
+# Then open http://localhost:7860 in your browser
+```
+
+**Benefits:**
+- Works through firewalls
+- Secure encrypted connection
+- Access as if FaceFusion was running locally
+
+### Method 4: Gradio Share Mode
+
+Create a temporary public URL using Gradio's built-in sharing feature.
+
+**How to use:**
+
+1. SSH into your instance
+2. Stop the current FaceFusion service:
+   ```bash
+   supervisorctl stop facefusion
+   ```
+3. Start FaceFusion with the share flag:
+   ```bash
+   cd /workspace/facefusion
+   source .venv/bin/activate
+   python facefusion.py run --share
+   ```
+4. Gradio will output a public URL like: `https://abcdef123456.gradio.live`
+5. Access FaceFusion using this URL from anywhere
+
+**Benefits:**
+- Works from anywhere without port configuration
+- Temporary URL expires after 72 hours
+- Good for sharing access with others temporarily
+
+**Limitations:**
+- Requires manual start
+- URL changes each time you restart
+- Limited to 72 hours
 
 ---
 
@@ -94,8 +216,8 @@ Click the **"Edit Image & Config"** button to customize your instance:
 
 | Field | Value | Description |
 |-------|-------|-------------|
-| **Image Path/Tag** | `ghcr.io/mlshdev/facefusion-cuda130:latest` | The Docker image to use. If you built your own image, replace `mlshdev` with your GitHub username. |
-| **Docker Options** | `-p 7860:17860 -p 22:22` | Port mappings for FaceFusion web interface (external:internal) and SSH. |
+| **Image Path/Tag** | `ghcr.io/mlshdev/facefusion:latest` | The Docker image to use. If you built your own image, replace `mlshdev` with your GitHub username. |
+| **Docker Options** | `-p 1111:1111 -p 7860:7860` | Port mappings for Instance Portal and FaceFusion web interface. |
 | **Launch Mode** | `Run interactive shell server, SSH` | Recommended for SSH access with entrypoint execution. |
 | **On-start Script** | `/opt/entrypoint.sh` | The entrypoint script that initializes the container. |
 
@@ -105,9 +227,11 @@ Add these environment variables in the **"Environment Variables"** section:
 
 | Variable | Example Value | Required | Description |
 |----------|---------------|----------|-------------|
-| `FACEFUSION_ARGS` | `--server-name 0.0.0.0 --server-port 17860` | No | Command line arguments for FaceFusion. Default is shown. |
+| `FACEFUSION_ARGS` | `--execution-providers cuda` | No | CLI arguments for FaceFusion. Default: `--execution-providers cuda` |
+| `GRADIO_SERVER_PORT` | `7860` | No | Port for FaceFusion web interface. Default: `7860` |
 | `WORKSPACE` | `/workspace` | No | Base workspace directory. Default: `/workspace` |
 | `PROVISIONING_SCRIPT` | `https://raw.githubusercontent.com/user/repo/main/setup.sh` | No | URL to a shell script for automatic model/extension setup |
+| `CF_TUNNEL_TOKEN` | `your-tunnel-token` | No | Cloudflare named tunnel token for custom domain access |
 
 #### Disk Configuration
 
@@ -133,15 +257,7 @@ For persistent storage that survives instance deletion:
    - **Batch processing**: 24-48 GB+ VRAM recommended
 2. Click **"Rent"** to launch your instance
 3. Wait for the instance to start (watch the status indicator)
-4. Click **"Open"** or use SSH to connect
-
-### Step 5: Access FaceFusion
-
-Once your instance is running:
-
-1. Find the mapped port for 7860 in your instance details
-2. Open `http://<PUBLIC_IP>:<MAPPED_PORT>` in your browser
-3. The FaceFusion web interface should load
+4. Click **"Open"** to access the Instance Portal
 
 ---
 
@@ -184,8 +300,8 @@ Note the `ID` column from the search results - this is your `<OFFER_ID>`.
 
 ```bash
 vastai create instance <OFFER_ID> \
-  --image ghcr.io/mlshdev/facefusion-cuda130:latest \
-  --env '-p 7860:17860 -p 22:22' \
+  --image ghcr.io/mlshdev/facefusion:latest \
+  --env '-p 1111:1111 -p 7860:7860' \
   --onstart-cmd '/opt/entrypoint.sh' \
   --disk 50 \
   --ssh \
@@ -198,9 +314,9 @@ vastai create instance <OFFER_ID> \
 
 ```bash
 vastai create instance <OFFER_ID> \
-  --image ghcr.io/mlshdev/facefusion-cuda130:latest \
-  --env '-p 7860:17860 -p 22:22 \
-         -e FACEFUSION_ARGS="--server-name 0.0.0.0 --server-port 17860" \
+  --image ghcr.io/mlshdev/facefusion:latest \
+  --env '-p 1111:1111 -p 7860:7860 \
+         -e FACEFUSION_ARGS="--execution-providers tensorrt" \
          -e WORKSPACE=/workspace \
          -e PROVISIONING_SCRIPT=https://raw.githubusercontent.com/user/repo/main/setup.sh' \
   --onstart-cmd '/opt/entrypoint.sh' \
@@ -210,22 +326,17 @@ vastai create instance <OFFER_ID> \
   --label "FaceFusion-Research"
 ```
 
-### Advanced Configuration (Full Portal Support)
+### With Custom Cloudflare Tunnel (Named Tunnel)
 
-For full vast.ai Instance Portal integration with Jupyter, Tensorboard, and Syncthing:
+For a custom domain instead of random Cloudflare URLs:
 
 ```bash
 vastai create instance <OFFER_ID> \
-  --image ghcr.io/mlshdev/facefusion-cuda130:latest \
-  --env '-p 1111:1111 -p 6006:6006 -p 8080:8080 -p 8384:8384 -p 7860:17860 \
-         -e OPEN_BUTTON_PORT=7860 \
-         -e OPEN_BUTTON_TOKEN=1 \
-         -e JUPYTER_DIR=/ \
-         -e DATA_DIRECTORY=/workspace/ \
-         -e PORTAL_CONFIG="localhost:7860:17860:/:FaceFusion|localhost:8080:18080:/:Jupyter|localhost:8080:8080:/terminals/1:Jupyter Terminal|localhost:8384:18384:/:Syncthing|localhost:6006:16006:/:Tensorboard"' \
+  --image ghcr.io/mlshdev/facefusion:latest \
+  --env '-p 1111:1111 -p 7860:7860 \
+         -e CF_TUNNEL_TOKEN=your-cloudflare-tunnel-token' \
   --onstart-cmd '/opt/entrypoint.sh' \
   --disk 100 \
-  --jupyter \
   --ssh \
   --direct
 ```
@@ -242,9 +353,6 @@ vastai create instance <OFFER_ID> \
 | `--ssh` | flag | Enable SSH access |
 | `--direct` | flag | Use direct network connection (recommended for SSH) |
 | `--label` | string | Human-readable name for the instance |
-| `--jupyter` | flag | Enable Jupyter notebook |
-| `--jupyter-dir` | string | Directory for Jupyter to use |
-| `--jupyter-lab` | flag | Use JupyterLab instead of classic notebook |
 
 ### Connecting to Your Instance
 
@@ -354,7 +462,7 @@ You can forward FaceFusion to your local machine for direct access:
 
 ```bash
 # Forward FaceFusion to localhost:7860
-ssh -p <REMAPPED_PORT> -L 7860:localhost:17860 root@<PUBLIC_IP>
+ssh -p <REMAPPED_PORT> -L 7860:localhost:7860 root@<PUBLIC_IP>
 
 # Then access FaceFusion at http://localhost:7860
 ```
@@ -367,51 +475,103 @@ ssh -p <REMAPPED_PORT> -L 7860:localhost:17860 root@<PUBLIC_IP>
 |----------|---------|-------------|
 | `WORKSPACE` | `/workspace` | Base workspace directory for FaceFusion and data |
 | `FACEFUSION_DIR` | `/workspace/facefusion` | FaceFusion installation directory |
-| `FACEFUSION_ARGS` | `--server-name 0.0.0.0 --server-port 17860` | Command line arguments passed to FaceFusion |
+| `GRADIO_SERVER_NAME` | `0.0.0.0` | IP address for Gradio/FaceFusion to listen on |
+| `GRADIO_SERVER_PORT` | `7860` | Port for FaceFusion web interface |
+| `FACEFUSION_ARGS` | `--execution-providers cuda` | CLI arguments for FaceFusion execution settings |
 | `PROVISIONING_SCRIPT` | (none) | URL to a shell script for automatic setup on first boot |
+| `CF_TUNNEL_TOKEN` | (none) | Cloudflare named tunnel token for custom domain access |
+| `PORTAL_CONFIG` | (see below) | Configuration for Instance Portal applications |
 
-### FACEFUSION_ARGS Options
+### Default PORTAL_CONFIG
 
-Common arguments you can use:
+```
+localhost:1111:11111:/:Instance Portal|localhost:7860:7860:/:FaceFusion
+```
 
-| Argument | Description |
-|----------|-------------|
-| `--server-port PORT` | Port for FaceFusion web server (internal). Default: `17860` |
-| `--server-name IP` | IP address to listen on. Default: `0.0.0.0` |
-| `--open-browser` | Open browser on startup (omit this flag for server use) |
-| `--execution-providers cuda` | Use CUDA for GPU acceleration |
-| `--execution-providers tensorrt` | Use TensorRT for optimized inference |
-| `--execution-thread-count N` | Number of execution threads |
-| `--execution-queue-count N` | Number of execution queues |
+---
+
+## FaceFusion Run Parameters
+
+FaceFusion can be customized using CLI arguments and environment variables.
+
+### Server Configuration (via Environment Variables)
+
+The server settings are configured using Gradio environment variables:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `GRADIO_SERVER_NAME` | Bind address | `0.0.0.0` (all interfaces) |
+| `GRADIO_SERVER_PORT` | Server port | `7860` |
+
+### Execution Configuration (via FACEFUSION_ARGS)
+
+Set these in the `FACEFUSION_ARGS` environment variable:
+
+| Argument | Description | Example |
+|----------|-------------|---------|
+| `--execution-providers` | GPU acceleration backend | `cuda`, `tensorrt`, `cpu` |
+| `--execution-device-ids` | GPU device(s) to use | `0`, `0 1` (for multi-GPU) |
+| `--execution-thread-count` | Processing threads | `4` (default), up to `32` |
+
+### Common FACEFUSION_ARGS Examples
+
+```bash
+# Use CUDA (default)
+FACEFUSION_ARGS="--execution-providers cuda"
+
+# Use TensorRT for faster inference
+FACEFUSION_ARGS="--execution-providers tensorrt"
+
+# Use multiple GPUs
+FACEFUSION_ARGS="--execution-providers cuda --execution-device-ids 0 1"
+
+# Increase thread count for faster processing
+FACEFUSION_ARGS="--execution-providers cuda --execution-thread-count 16"
+
+# Debug mode
+FACEFUSION_ARGS="--execution-providers cuda --log-level debug"
+```
+
+### Execution Providers
+
+| Provider | Description | When to Use |
+|----------|-------------|-------------|
+| `cuda` | NVIDIA CUDA acceleration | Default choice for NVIDIA GPUs |
+| `tensorrt` | NVIDIA TensorRT optimization | Maximum performance (requires TensorRT) |
+| `cpu` | CPU processing | When no GPU is available |
 
 ---
 
 ## Ports Reference
 
-### Internal vs External Ports
+### Internal Ports
 
-| Service | Default Internal Port | Description |
-|---------|----------------------|-------------|
-| FaceFusion | 17860 | FaceFusion web interface (configurable via `FACEFUSION_ARGS`) |
+| Service | Internal Port | Description |
+|---------|--------------|-------------|
+| Instance Portal | 11111 | Internal portal API |
+| Instance Portal UI | 1111 (proxied) | External access via Caddy |
+| Tunnel Manager | 11112 | Cloudflare tunnel management API |
+| Cloudflare Metrics | 11113 | Cloudflare tunnel metrics |
+| FaceFusion | 7860 | FaceFusion Gradio web interface |
 | SSH | 22 | SSH access |
 
 ### Port Mapping in Docker
 
-FaceFusion listens on port **17860** by default. When configuring your instance, map your desired external port to 17860:
+Configure port mappings in your Docker options:
 
 ```bash
-# Map external port 7860 to FaceFusion's internal port 17860
--p 7860:17860
+# Instance Portal and FaceFusion
+-p 1111:1111 -p 7860:7860
 
 # SSH port (Vast.ai will remap this to a random external port)
 -p 22:22
 ```
 
-### Accessing FaceFusion
+### Accessing Applications
 
-1. **Via Vast.ai Dashboard**: Click **"Open"** on your instance or access the remapped port shown in the instance details
-2. **Via Direct IP**: `http://PUBLIC_IP:PORT` (where PORT is your mapped external port)
-3. **Via SSH Tunnel**: Forward port 17860 locally for direct access
+1. **Via Instance Portal**: Click **"Open"** on your instance card, then use the portal to launch applications
+2. **Via Cloudflare Tunnel**: Use the `https://xxx.trycloudflare.com` URL provided by the Instance Portal
+3. **Via Direct IP**: Use `http://PUBLIC_IP:PORT` where PORT is your mapped external port
 
 ---
 
@@ -461,8 +621,8 @@ PROVISIONING_SCRIPT=https://gist.githubusercontent.com/YOUR_USERNAME/GIST_ID/raw
 **CLI**:
 ```bash
 vastai create instance <OFFER_ID> \
-  --image ghcr.io/mlshdev/facefusion-cuda130:latest \
-  --env '-p 7860:17860 -p 22:22 -e PROVISIONING_SCRIPT=https://gist.githubusercontent.com/YOUR_USERNAME/GIST_ID/raw/setup.sh' \
+  --image ghcr.io/mlshdev/facefusion:latest \
+  --env '-p 1111:1111 -p 7860:7860 -e PROVISIONING_SCRIPT=https://gist.githubusercontent.com/YOUR_USERNAME/GIST_ID/raw/setup.sh' \
   --onstart-cmd '/opt/entrypoint.sh' \
   --disk 100
 ```
@@ -489,7 +649,14 @@ vastai create instance <OFFER_ID> \
 ├── entrypoint.sh           # Container entrypoint script
 ├── start-facefusion.sh     # FaceFusion startup script
 ├── propagate-ssh-keys.sh   # SSH key propagation script
-└── aws-cli/                # AWS CLI installation
+├── aws-cli/                # AWS CLI installation
+└── portal-aio/             # Instance Portal components
+    ├── portal/             # Portal web interface
+    ├── tunnel_manager/     # Cloudflare tunnel manager
+    ├── caddy_manager/      # Caddy reverse proxy
+    ├── cloudflared         # Cloudflare tunnel client
+    ├── caddy               # Caddy web server
+    └── venv/               # Portal Python environment
 ```
 
 ---
@@ -565,6 +732,13 @@ supervisorctl tail facefusion
 - FaceFusion service: `/etc/supervisor/conf.d/facefusion.conf`
 - SSHD service: `/etc/supervisor/conf.d/sshd.conf`
 
+### Instance Portal Logs
+
+Portal logs are stored in `/var/log/portal/`:
+- `portal.log` - Portal web interface
+- `caddy.log` - Caddy reverse proxy
+- `tunnel-manager.log` - Cloudflare tunnel manager
+
 ---
 
 ## Building
@@ -572,8 +746,8 @@ supervisorctl tail facefusion
 ### Building Locally
 
 ```bash
-cd facefusion
-docker build -t facefusion-cuda130:local .
+# From the repository root
+docker build -f facefusion/Dockerfile -t facefusion:local .
 ```
 
 ### Building with GitHub Actions
@@ -636,6 +810,18 @@ If you need to restore NSFW detection:
 2. Verify FaceFusion directory exists: `ls -la /workspace/facefusion`
 3. Check if provisioning is still running: `ls /.provisioning`
 
+### Cannot Access Instance Portal
+
+1. Verify portal is running: check `/var/log/portal/portal.log`
+2. Verify port 1111 is mapped in your template
+3. Try direct IP access: `http://PUBLIC_IP:EXTERNAL_PORT`
+
+### Cloudflare Tunnel Not Working
+
+1. Check tunnel manager logs: `cat /var/log/portal/tunnel-manager.log`
+2. Verify cloudflared is working: `pgrep cloudflared`
+3. Use the Instance Portal Tunnels page to manually create a tunnel
+
 ### Out of VRAM
 
 1. Use lower resolution or smaller batch sizes
@@ -647,6 +833,7 @@ If you need to restore NSFW detection:
 1. Verify FaceFusion is running: `supervisorctl status facefusion`
 2. Check port mapping in your Vast.ai instance configuration
 3. Try SSH port forwarding as an alternative
+4. Use the Instance Portal Cloudflare tunnel
 
 ### Models Not Loading
 
@@ -670,8 +857,11 @@ If you need to restore NSFW detection:
 - [Vast.ai CLI Commands](https://docs.vast.ai/cli/commands)
 - [Vast.ai SSH Guide](https://docs.vast.ai/documentation/instances/connect/ssh)
 - [Vast.ai Storage & Volumes](https://docs.vast.ai/documentation/instances/storage/types)
+- [Vast.ai Instance Portal](https://docs.vast.ai/documentation/instances/connect/instance-portal)
+- [Vast.ai Networking & Ports](https://docs.vast.ai/documentation/instances/connect/networking)
 - [AWS Mountpoint S3](https://github.com/awslabs/mountpoint-s3)
 - [uv Package Manager](https://github.com/astral-sh/uv)
+- [Cloudflare Tunnels](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)
 
 ---
 

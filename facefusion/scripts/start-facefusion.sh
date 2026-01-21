@@ -2,11 +2,18 @@
 
 # Start FaceFusion script
 # Activates the virtual environment and launches FaceFusion with configured arguments
+# Uses Gradio environment variables for server configuration
 
 set -e
 
 FACEFUSION_DIR="${FACEFUSION_DIR:-/workspace/facefusion}"
-FACEFUSION_ARGS="${FACEFUSION_ARGS:---server-name 0.0.0.0 --server-port 17860}"
+
+# FaceFusion CLI arguments for execution settings (server settings use GRADIO_* env vars)
+# Common arguments:
+#   --execution-providers cuda|tensorrt  - GPU acceleration backend
+#   --execution-device-ids 0             - GPU device to use
+#   --execution-thread-count 4           - Number of processing threads
+FACEFUSION_ARGS="${FACEFUSION_ARGS:---execution-providers cuda}"
 
 cd "${FACEFUSION_DIR}"
 
@@ -26,7 +33,14 @@ echo "Checking FaceFusion requirements..."
 # Note: We skip onnxruntime since we have GPU version installed
 uv pip install --quiet gradio-rangeslider gradio numpy onnx opencv-python psutil tqdm scipy 2>/dev/null || true
 
-echo "Starting FaceFusion with args: run ${FACEFUSION_ARGS}"
+# Log configuration
+echo "Starting FaceFusion with:"
+echo "  GRADIO_SERVER_NAME=${GRADIO_SERVER_NAME:-0.0.0.0}"
+echo "  GRADIO_SERVER_PORT=${GRADIO_SERVER_PORT:-7860}"
+echo "  CLI args: run ${FACEFUSION_ARGS}"
 
 # Launch FaceFusion
+# Server settings are controlled by environment variables:
+#   - GRADIO_SERVER_NAME: Bind address (default: 0.0.0.0)
+#   - GRADIO_SERVER_PORT: Server port (default: 7860)
 exec python facefusion.py run ${FACEFUSION_ARGS}

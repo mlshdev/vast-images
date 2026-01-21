@@ -1,6 +1,6 @@
-# Multi-stage Dockerfile for FaceFusion with CUDA 13.0.2
+# Multi-stage Dockerfile for FaceFusion with CUDA 12.9.1
 # Builds custom Docker image for vast.ai cloud platform
-# Features: CUDA + TensorRT acceleration, NSFW detection disabled for research
+# Features: CUDA + TensorRT acceleration, Instance Portal with Cloudflare tunnels, NSFW detection disabled for research
 
 # Stage 1: Get uv from distroless image
 FROM ghcr.io/astral-sh/uv:latest AS uv-source
@@ -19,11 +19,11 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
     && ./aws/install --install-dir /opt/aws-cli --bin-dir /opt/aws-cli/bin
 
 # Stage 3: Main build
-FROM docker.io/nvidia/cuda:13.0.2-runtime-ubuntu24.04 AS main
+FROM docker.io/nvidia/cuda:12.9.1-cudnn-runtime-ubuntu24.04 AS main
 
 # Maintainer details
 LABEL org.opencontainers.image.source="https://github.com/mlshdev/vast-images"
-LABEL org.opencontainers.image.description="FaceFusion image with CUDA 13.0.2 and TensorRT for Vast.ai"
+LABEL org.opencontainers.image.description="FaceFusion image with CUDA 12.9.1, Instance Portal, Cloudflare tunnels for Vast.ai"
 LABEL maintainer="mlshdev"
 
 # Environment configuration
@@ -39,9 +39,25 @@ ENV WORKSPACE=/workspace
 ENV UV_NO_CACHE=1
 ENV UV_LINK_MODE=copy
 
-# FaceFusion configuration
+# FaceFusion configuration using Gradio environment variables
+# These are the recommended way to configure Gradio-based applications
 ENV FACEFUSION_DIR=/workspace/facefusion
-ENV FACEFUSION_ARGS="--server-name 0.0.0.0 --server-port 17860"
+ENV GRADIO_SERVER_NAME=0.0.0.0
+ENV GRADIO_SERVER_PORT=7860
+
+# FaceFusion CLI arguments (for execution provider and other settings)
+# Note: Server settings are configured via GRADIO_* environment variables above
+ENV FACEFUSION_ARGS="--execution-providers cuda"
+
+# Instance Portal configuration for vast.ai
+# This enables the Instance Portal with Cloudflare tunnel integration
+ENV TUNNEL_MANAGER="http://localhost:11112"
+ENV CLOUDFLARE_METRICS="localhost:11113"
+
+# Default PORTAL_CONFIG for FaceFusion - configure applications for Instance Portal
+# Format: hostname:external_port:internal_port:path:name
+# external_port != internal_port means Caddy will act as reverse proxy
+ENV PORTAL_CONFIG="localhost:1111:11111:/:Instance Portal|localhost:7860:7860:/:FaceFusion"
 
 # Copy uv binary from distroless image
 COPY --from=uv-source /uv /usr/local/bin/uv
@@ -81,6 +97,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Required for AWS Mountpoint S3
     libfuse2t64 \
     fuse3 \
+    # Required for portal-aio (Instance Portal)
+    jq \
+    openssl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -115,13 +134,13 @@ RUN cd /workspace/facefusion && \
     # Modify core.py to skip hash verification
     sed -i "s/return all(module.pre_check() for module in common_modules) and content_analyser_hash == 'b14e7b92'/# RESEARCH MODE: Skip hash check for modified content_analyser\n\treturn all(module.pre_check() for module in common_modules)/" facefusion/core.py
 
-# Create FaceFusion venv and install PyTorch with CUDA 13.0 nightly
+# Create FaceFusion venv and install PyTorch with CUDA 12.9 nightly
 RUN cd /workspace/facefusion && \
     uv venv .venv --python 3.12 && \
     . .venv/bin/activate && \
     uv pip install --compile-bytecode \
         --pre torch torchvision torchaudio \
-        --index-url https://download.pytorch.org/whl/nightly/cu130 && \
+        --index-url https://download.pytorch.org/whl/nightly/cu129 && \
     deactivate
 
 # Install TensorRT into the venv (as specified in requirements)
@@ -170,26 +189,44 @@ RUN useradd -ms /bin/bash user -u 1001 -g 0 && \
     chown -R user:root /home/user/.ssh
 
 # Create supervisor directories
-RUN mkdir -p /var/log/supervisor /etc/supervisor/conf.d
+RUN mkdir -p /var/log/supervisor /etc/supervisor/conf.d /var/log/portal
+
+# Copy portal-aio components for Instance Portal and Cloudflare tunnel integration
+COPY portal-aio /opt/portal-aio
+
+# Create portal-aio venv and install dependencies
+RUN python3 -m venv /opt/portal-aio/venv && \
+    /opt/portal-aio/venv/bin/pip install --upgrade pip && \
+    /opt/portal-aio/venv/bin/pip install -r /opt/portal-aio/requirements.txt
+
+# Download cloudflared binary for Cloudflare Quick Tunnels
+RUN curl -fsSL -o /opt/portal-aio/tunnel_manager/cloudflared \
+        "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" && \
+    chmod +x /opt/portal-aio/tunnel_manager/cloudflared
+
+# Download Caddy binary for reverse proxy
+RUN curl -fsSL -o /tmp/caddy.tar.gz \
+        "https://github.com/caddyserver/caddy/releases/download/v2.9.1/caddy_2.9.1_linux_amd64.tar.gz" && \
+    tar -xzf /tmp/caddy.tar.gz -C /opt/portal-aio/caddy_manager caddy && \
+    chmod +x /opt/portal-aio/caddy_manager/caddy && \
+    rm -f /tmp/caddy.tar.gz
 
 # Copy supervisor configuration
-COPY supervisord.conf /etc/supervisor/supervisord.conf
-COPY conf.d/ /etc/supervisor/conf.d/
+COPY facefusion/supervisord.conf /etc/supervisor/supervisord.conf
+COPY facefusion/conf.d/ /etc/supervisor/conf.d/
 
 # Copy scripts
-COPY scripts/entrypoint.sh /opt/entrypoint.sh
-COPY scripts/start-facefusion.sh /opt/start-facefusion.sh
-COPY scripts/propagate-ssh-keys.sh /opt/propagate-ssh-keys.sh
+COPY facefusion/scripts/entrypoint.sh /opt/entrypoint.sh
+COPY facefusion/scripts/start-facefusion.sh /opt/start-facefusion.sh
+COPY facefusion/scripts/propagate-ssh-keys.sh /opt/propagate-ssh-keys.sh
 
 RUN chmod +x /opt/entrypoint.sh /opt/start-facefusion.sh /opt/propagate-ssh-keys.sh
 
 # Expose ports
-# 1111 - Instance Portal
-# 8080 - Jupyter (optional)
-# 7860 - FaceFusion external port
-# 17860 - FaceFusion internal port
+# 1111 - Instance Portal (proxied by Caddy)
+# 7860 - FaceFusion WebUI (Gradio)
 # 22 - SSH
-EXPOSE 1111 8080 7860 17860 22
+EXPOSE 1111 7860 22
 
 # Set working directory
 WORKDIR /workspace
