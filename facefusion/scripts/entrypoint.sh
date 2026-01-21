@@ -1,13 +1,16 @@
 #!/bin/bash
 
 # Entrypoint script for FaceFusion container on vast.ai
-# Handles SSH key propagation, environment setup, and supervisor launch
+# Handles SSH key propagation, environment setup, Instance Portal, and supervisor launch
 
 set -e
 
 # Setup workspace directory
 mkdir -p "${WORKSPACE:-/workspace}"
 cd "${WORKSPACE:-/workspace}"
+
+# Create log directories
+mkdir -p /var/log/portal /var/log/supervisor
 
 # Propagate SSH keys for vast.ai compatibility
 if [[ -f /opt/propagate-ssh-keys.sh ]]; then
@@ -33,6 +36,12 @@ if [[ -n "${CONTAINER_ID:-${VAST_CONTAINERLABEL:-${CONTAINER_LABEL:-}}}" ]]; the
             printf '%s="%s"\n' "$name" "$value"
         done >> /etc/environment
     fi
+fi
+
+# Generate authentication token for Instance Portal if not set
+if [[ -z "${OPEN_BUTTON_TOKEN:-}" ]]; then
+    export OPEN_BUTTON_TOKEN=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+    echo "OPEN_BUTTON_TOKEN=\"${OPEN_BUTTON_TOKEN}\"" >> /etc/environment
 fi
 
 # Create SSH host keys if they don't exist
@@ -63,5 +72,13 @@ if [[ -n "${PROVISIONING_SCRIPT:-}" && ! -f /.provisioning_complete ]]; then
     touch /.provisioning_complete
 fi
 
-# Start supervisor in the foreground
+# Start Instance Portal components in background
+# This launches Caddy (reverse proxy), tunnel manager, and portal UI
+# The launch.sh script handles its own process management and cleanup
+echo "Starting Instance Portal components..."
+/opt/portal-aio/launch.sh &
+PORTAL_PID=$!
+echo "Instance Portal started with PID: $PORTAL_PID"
+
+# Start supervisor in the foreground (manages FaceFusion and SSHD)
 exec /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf
