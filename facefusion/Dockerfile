@@ -135,26 +135,29 @@ RUN cd /workspace/facefusion && \
     sed -i "s/return all(module.pre_check() for module in common_modules) and content_analyser_hash == 'b14e7b92'/# RESEARCH MODE: Skip hash check for modified content_analyser\n\treturn all(module.pre_check() for module in common_modules)/" facefusion/core.py
 
 # Create FaceFusion venv and install PyTorch with CUDA 12.9 nightly
+# Set UV_HTTP_TIMEOUT to 300s (5 minutes) for large NVIDIA package downloads
 RUN cd /workspace/facefusion && \
     uv venv .venv --python 3.12 && \
     . .venv/bin/activate && \
-    uv pip install --compile-bytecode \
+    UV_HTTP_TIMEOUT=300 uv pip install --compile-bytecode \
         --pre torch torchvision torchaudio \
         --index-url https://download.pytorch.org/whl/nightly/cu129 && \
     deactivate
 
 # Install TensorRT into the venv (as specified in requirements)
+# Set UV_HTTP_TIMEOUT to 300s (5 minutes) for large NVIDIA package downloads
 RUN cd /workspace/facefusion && \
     . .venv/bin/activate && \
-    uv pip install --compile-bytecode \
+    UV_HTTP_TIMEOUT=300 uv pip install --compile-bytecode \
         tensorrt==10.12.0.36 \
         --extra-index-url https://pypi.nvidia.com && \
     deactivate
 
 # Install onnxruntime-gpu for CUDA acceleration
+# Set UV_HTTP_TIMEOUT to 300s (5 minutes) for large NVIDIA package downloads
 RUN cd /workspace/facefusion && \
     . .venv/bin/activate && \
-    uv pip install --compile-bytecode \
+    UV_HTTP_TIMEOUT=300 uv pip install --compile-bytecode \
         onnxruntime-gpu==1.23.2 && \
     deactivate
 
