@@ -149,14 +149,14 @@ Forward FaceFusion's port through SSH to access it locally on your machine.
 1. Get your SSH connection details from the Vast.ai dashboard
 2. Connect with port forwarding:
    ```bash
-   ssh -p <SSH_PORT> -L 7860:localhost:7860 root@<PUBLIC_IP>
+   ssh -p <SSH_PORT> -L 7860:localhost:17860 root@<PUBLIC_IP>
    ```
 3. Open your browser and navigate to: `http://localhost:7860`
 
 **Example:**
 ```bash
 # Forward FaceFusion to your local machine
-ssh -p 23456 -L 7860:localhost:7860 root@65.130.162.74
+ssh -p 23456 -L 7860:localhost:17860 root@65.130.162.74
 
 # Then open http://localhost:7860 in your browser
 ```
@@ -462,7 +462,7 @@ You can forward FaceFusion to your local machine for direct access:
 
 ```bash
 # Forward FaceFusion to localhost:7860
-ssh -p <REMAPPED_PORT> -L 7860:localhost:7860 root@<PUBLIC_IP>
+ssh -p <REMAPPED_PORT> -L 7860:localhost:17860 root@<PUBLIC_IP>
 
 # Then access FaceFusion at http://localhost:7860
 ```
@@ -476,7 +476,7 @@ ssh -p <REMAPPED_PORT> -L 7860:localhost:7860 root@<PUBLIC_IP>
 | `WORKSPACE` | `/workspace` | Base workspace directory for FaceFusion and data |
 | `FACEFUSION_DIR` | `/workspace/facefusion` | FaceFusion installation directory |
 | `GRADIO_SERVER_NAME` | `0.0.0.0` | IP address for Gradio/FaceFusion to listen on |
-| `GRADIO_SERVER_PORT` | `7860` | Port for FaceFusion web interface |
+| `GRADIO_SERVER_PORT` | `17860` | Internal port for FaceFusion web interface (Caddy proxies external 7860 to this) |
 | `FACEFUSION_ARGS` | `--execution-providers cuda` | CLI arguments for FaceFusion execution settings |
 | `PROVISIONING_SCRIPT` | (none) | URL to a shell script for automatic setup on first boot |
 | `CF_TUNNEL_TOKEN` | (none) | Cloudflare named tunnel token for custom domain access |
@@ -485,8 +485,15 @@ ssh -p <REMAPPED_PORT> -L 7860:localhost:7860 root@<PUBLIC_IP>
 ### Default PORTAL_CONFIG
 
 ```
-localhost:1111:11111:/:Instance Portal|localhost:7860:7860:/:FaceFusion
+localhost:1111:11111:/:Instance Portal|localhost:7860:17860:/:FaceFusion
 ```
+
+The format is `hostname:external_port:internal_port:path:name`. When external_port differs from internal_port, Caddy reverse proxy handles the traffic, enabling:
+- Cloudflare tunnel integration
+- Authentication via the Instance Portal
+- HTTPS support when `ENABLE_HTTPS=true`
+
+FaceFusion listens on internal port 17860, and Caddy proxies external port 7860 to it.
 
 ---
 
@@ -546,14 +553,13 @@ FACEFUSION_ARGS="--execution-providers cuda --log-level debug"
 
 ### Internal Ports
 
-| Service | Internal Port | Description |
-|---------|--------------|-------------|
-| Instance Portal | 11111 | Internal portal API |
-| Instance Portal UI | 1111 (proxied) | External access via Caddy |
-| Tunnel Manager | 11112 | Cloudflare tunnel management API |
-| Cloudflare Metrics | 11113 | Cloudflare tunnel metrics |
-| FaceFusion | 7860 | FaceFusion Gradio web interface |
-| SSH | 22 | SSH access |
+| Service | Internal Port | External Port | Description |
+|---------|--------------|---------------|-------------|
+| Instance Portal | 11111 | 1111 | Portal API, proxied by Caddy |
+| Tunnel Manager | 11112 | - | Cloudflare tunnel management API (internal only) |
+| Cloudflare Metrics | 11113 | - | Cloudflare tunnel metrics (internal only) |
+| FaceFusion | 17860 | 7860 | FaceFusion Gradio web interface, proxied by Caddy |
+| SSH | 22 | (remapped) | SSH access (Vast.ai remaps to random external port) |
 
 ### Port Mapping in Docker
 
