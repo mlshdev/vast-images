@@ -69,6 +69,24 @@ In the FaceFusion virtual environment:
 - onnxruntime-gpu 1.23.2
 - All FaceFusion requirements
 
+### Pre-downloaded AI Models
+
+The image includes pre-downloaded FaceFusion models to avoid downloading them at runtime, significantly speeding up the initial startup:
+
+| Model | Purpose | Size |
+|-------|---------|------|
+| **yoloface_8n** | Face detection | ~6 MB |
+| **2dfan4** | Face landmark detection | ~98 MB |
+| **fan_68_5** | Face landmark refinement | ~0.5 MB |
+| **arcface_w600k_r50** | Face recognition/embedding | ~91 MB |
+| **xseg_1** | Face occlusion masking | ~24 MB |
+| **bisenet_resnet_34** | Face region parsing | ~88 MB |
+| **hyperswap_1c_256** | High-quality face swapping | ~553 MB |
+| **gpen_bfr_2048** | Face enhancement (2K) | ~2 GB |
+| **real_esrgan_x8_fp16** | 8x frame upscaling (FP16) | ~67 MB |
+
+These models are configured as defaults in the `facefusion.ini` configuration file. The models are stored in `/workspace/facefusion/.assets/models/` and FaceFusion will detect them automatically.
+
 ---
 
 ## Quick Start
@@ -636,13 +654,23 @@ vastai create instance <OFFER_ID> \
 └── facefusion/
     ├── .venv/              # Python virtual environment
     ├── .assets/
-    │   └── models/         # Downloaded AI models
+    │   └── models/         # Pre-downloaded AI models
+    │       ├── 2dfan4.onnx           # Face landmark detection
+    │       ├── arcface_w600k_r50.onnx  # Face recognition
+    │       ├── bisenet_resnet_34.onnx  # Face parsing
+    │       ├── fan_68_5.onnx          # Landmark refinement
+    │       ├── gpen_bfr_2048.onnx     # Face enhancement
+    │       ├── hyperswap_1c_256.onnx  # Face swapping
+    │       ├── real_esrgan_x8_fp16.onnx  # Frame upscaling
+    │       ├── xseg_1.onnx            # Occlusion masking
+    │       ├── yoloface_8n.onnx       # Face detection
+    │       └── *.hash                 # Model hash files
     ├── facefusion/         # FaceFusion source code
     │   ├── content_analyser.py  # Modified for research mode
     │   ├── core.py              # Modified for research mode
     │   └── ...
     ├── facefusion.py       # Main entry point
-    ├── facefusion.ini      # Configuration file
+    ├── facefusion.ini      # Configuration file (sets default models)
     └── ...
 
 /opt/

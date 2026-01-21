@@ -175,6 +175,66 @@ RUN cd /workspace/facefusion && \
         scipy==1.16.3 && \
     deactivate
 
+# Copy custom facefusion.ini configuration file
+# This sets default models to use pre-downloaded models in the Docker image
+COPY facefusion/facefusion.ini /workspace/facefusion/facefusion.ini
+
+# Create models directory for pre-downloaded models
+RUN mkdir -p /workspace/facefusion/.assets/models
+
+# Pre-download FaceFusion models to avoid downloading after container starts
+# These models are configured as defaults in facefusion.ini
+#
+# Face Detector: yoloface_8n (default for yolo_face detector)
+RUN curl -fSL -o /workspace/facefusion/.assets/models/yoloface_8n.hash \
+        "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/yoloface_8n.hash" && \
+    curl -fSL -o /workspace/facefusion/.assets/models/yoloface_8n.onnx \
+        "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/yoloface_8n.onnx"
+
+# Face Landmarker: 2dfan4 and fan_68_5 (required for landmark detection)
+RUN curl -fSL -o /workspace/facefusion/.assets/models/2dfan4.hash \
+        "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/2dfan4.hash" && \
+    curl -fSL -o /workspace/facefusion/.assets/models/2dfan4.onnx \
+        "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/2dfan4.onnx" && \
+    curl -fSL -o /workspace/facefusion/.assets/models/fan_68_5.hash \
+        "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/fan_68_5.hash" && \
+    curl -fSL -o /workspace/facefusion/.assets/models/fan_68_5.onnx \
+        "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/fan_68_5.onnx"
+
+# Face Recognizer: arcface_w600k_r50 (required for face swapping)
+RUN curl -fSL -o /workspace/facefusion/.assets/models/arcface_w600k_r50.hash \
+        "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/arcface_w600k_r50.hash" && \
+    curl -fSL -o /workspace/facefusion/.assets/models/arcface_w600k_r50.onnx \
+        "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/arcface_w600k_r50.onnx"
+
+# Face Masker: xseg_1 (occlusion model) and bisenet_resnet_34 (parser model)
+RUN curl -fSL -o /workspace/facefusion/.assets/models/xseg_1.hash \
+        "https://github.com/facefusion/facefusion-assets/releases/download/models-3.1.0/xseg_1.hash" && \
+    curl -fSL -o /workspace/facefusion/.assets/models/xseg_1.onnx \
+        "https://github.com/facefusion/facefusion-assets/releases/download/models-3.1.0/xseg_1.onnx" && \
+    curl -fSL -o /workspace/facefusion/.assets/models/bisenet_resnet_34.hash \
+        "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/bisenet_resnet_34.hash" && \
+    curl -fSL -o /workspace/facefusion/.assets/models/bisenet_resnet_34.onnx \
+        "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/bisenet_resnet_34.onnx"
+
+# Face Swapper: hyperswap_1c_256 (high-quality face swap model)
+RUN curl -fSL -o /workspace/facefusion/.assets/models/hyperswap_1c_256.hash \
+        "https://github.com/facefusion/facefusion-assets/releases/download/models-3.3.0/hyperswap_1c_256.hash" && \
+    curl -fSL -o /workspace/facefusion/.assets/models/hyperswap_1c_256.onnx \
+        "https://github.com/facefusion/facefusion-assets/releases/download/models-3.3.0/hyperswap_1c_256.onnx"
+
+# Face Enhancer: gpen_bfr_2048 (high-resolution face enhancement)
+RUN curl -fSL -o /workspace/facefusion/.assets/models/gpen_bfr_2048.hash \
+        "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/gpen_bfr_2048.hash" && \
+    curl -fSL -o /workspace/facefusion/.assets/models/gpen_bfr_2048.onnx \
+        "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/gpen_bfr_2048.onnx"
+
+# Frame Enhancer: real_esrgan_x8_fp16 (8x upscaling with FP16 for GPU efficiency)
+RUN curl -fSL -o /workspace/facefusion/.assets/models/real_esrgan_x8_fp16.hash \
+        "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/real_esrgan_x8_fp16.hash" && \
+    curl -fSL -o /workspace/facefusion/.assets/models/real_esrgan_x8_fp16.onnx \
+        "https://github.com/facefusion/facefusion-assets/releases/download/models-3.0.0/real_esrgan_x8_fp16.onnx"
+
 # Setup SSH server for vast.ai compatibility
 RUN mkdir -p /var/run/sshd /root/.ssh && \
     chmod 700 /root/.ssh && \
