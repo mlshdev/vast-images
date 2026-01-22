@@ -40,7 +40,9 @@ fi
 
 # Generate authentication token for Instance Portal if not set
 if [[ -z "${OPEN_BUTTON_TOKEN:-}" ]]; then
-    export OPEN_BUTTON_TOKEN=$(head -c 32 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+    # Generate 48 bytes of random data, base64 encode, filter to alphanumeric, take first 32 chars
+    # Using 48 bytes ensures sufficient entropy after filtering
+    export OPEN_BUTTON_TOKEN=$(head -c 48 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
     echo "OPEN_BUTTON_TOKEN=\"${OPEN_BUTTON_TOKEN}\"" >> /etc/environment
 fi
 

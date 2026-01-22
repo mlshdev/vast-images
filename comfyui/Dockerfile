@@ -114,8 +114,9 @@ RUN cd /workspace/ComfyUI && \
         --index-url https://download.pytorch.org/whl/nightly/cu130 && \
     deactivate
 
-# Install TensorRT (with pre-built native libraries) into the venv
-# The tensorrt package from pypi.nvidia.com includes libnvinfer.so and other TensorRT native libraries
+# Install TensorRT packages (with pre-built native libraries) into the venv
+# The tensorrt, tensorrt-bindings, and tensorrt-libs packages from pypi.nvidia.com
+# include libnvinfer.so and other TensorRT native libraries in tensorrt_libs directory
 # Set UV_HTTP_TIMEOUT to 300s (5 minutes) for large NVIDIA package downloads
 RUN cd /workspace/ComfyUI && \
     . .venv/bin/activate && \
