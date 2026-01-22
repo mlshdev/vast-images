@@ -198,8 +198,9 @@ RUN curl -fsSL -o /opt/portal-aio/tunnel_manager/cloudflared \
     chmod +x /opt/portal-aio/tunnel_manager/cloudflared
 
 # Download latest Caddy binary for reverse proxy
-# Uses GitHub API to get the latest release version dynamically
-RUN CADDY_VERSION=$(curl -s https://api.github.com/repos/caddyserver/caddy/releases/latest | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/') && \
+# Uses GitHub API and jq to get the latest release version dynamically
+RUN CADDY_VERSION=$(curl -fsSL https://api.github.com/repos/caddyserver/caddy/releases/latest | jq -r '.tag_name' | sed 's/^v//') && \
+    test -n "${CADDY_VERSION}" || { echo "Failed to get Caddy version"; exit 1; } && \
     curl -fsSL -o /tmp/caddy.tar.gz \
         "https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_amd64.tar.gz" && \
     tar -xzf /tmp/caddy.tar.gz -C /opt/portal-aio/caddy_manager caddy && \
