@@ -1,13 +1,16 @@
 #!/bin/bash
 
 # Entrypoint script for ComfyUI container on vast.ai
-# Handles SSH key propagation, environment setup, and supervisor launch
+# Handles SSH key propagation, environment setup, Instance Portal, and supervisor launch
 
 set -e
 
 # Setup workspace directory
 mkdir -p "${WORKSPACE:-/workspace}"
 cd "${WORKSPACE:-/workspace}"
+
+# Create log directories
+mkdir -p /var/log/portal /var/log/supervisor
 
 # Propagate SSH keys for vast.ai compatibility
 if [[ -f /opt/propagate-ssh-keys.sh ]]; then
@@ -35,6 +38,14 @@ if [[ -n "${CONTAINER_ID:-${VAST_CONTAINERLABEL:-${CONTAINER_LABEL:-}}}" ]]; the
     fi
 fi
 
+# Generate authentication token for Instance Portal if not set
+if [[ -z "${OPEN_BUTTON_TOKEN:-}" ]]; then
+    # Generate 48 bytes of random data, base64 encode, filter to alphanumeric, take first 32 chars
+    # Using 48 bytes ensures sufficient entropy after filtering
+    export OPEN_BUTTON_TOKEN=$(head -c 48 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 32)
+    echo "OPEN_BUTTON_TOKEN=\"${OPEN_BUTTON_TOKEN}\"" >> /etc/environment
+fi
+
 # Create SSH host keys if they don't exist
 if [[ ! -f /etc/ssh/ssh_host_rsa_key ]]; then
     ssh-keygen -t rsa -f /etc/ssh/ssh_host_rsa_key -N '' -q
@@ -47,13 +58,29 @@ if [[ ! -f /etc/ssh/ssh_host_ed25519_key ]]; then
 fi
 
 # Execute provisioning script if provided
+# SECURITY NOTE: This feature is designed for vast.ai users to customize their instances.
+# Users should only set PROVISIONING_SCRIPT to URLs they control and trust.
+# Consider using HTTPS URLs and hosting scripts in trusted repositories.
 if [[ -n "${PROVISIONING_SCRIPT:-}" && ! -f /.provisioning_complete ]]; then
     echo "Running provisioning script from ${PROVISIONING_SCRIPT}"
-    curl -Lo /tmp/provisioning.sh "$PROVISIONING_SCRIPT"
+    # Validate URL starts with https:// for security (warn if not)
+    if [[ ! "${PROVISIONING_SCRIPT}" =~ ^https:// ]]; then
+        echo "WARNING: Provisioning script URL is not using HTTPS. This is less secure."
+    fi
+    curl -fsSL -o /tmp/provisioning.sh "$PROVISIONING_SCRIPT"
     chmod +x /tmp/provisioning.sh
     /tmp/provisioning.sh || echo "Provisioning script encountered errors"
+    rm -f /tmp/provisioning.sh
     touch /.provisioning_complete
 fi
 
-# Start supervisor in the foreground
+# Start Instance Portal components in background
+# This launches Caddy (reverse proxy), tunnel manager, and portal UI
+# The launch.sh script handles its own process management and cleanup
+echo "Starting Instance Portal components..."
+/opt/portal-aio/launch.sh &
+PORTAL_PID=$!
+echo "Instance Portal started with PID: $PORTAL_PID"
+
+# Start supervisor in the foreground (manages ComfyUI and SSHD)
 exec /usr/bin/supervisord -n -c /etc/supervisor/supervisord.conf

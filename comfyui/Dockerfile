@@ -1,11 +1,13 @@
 # Multi-stage Dockerfile for ComfyUI with CUDA 13.0.2
 # Builds custom Docker image for vast.ai cloud platform
+# Features: CUDA + TensorRT acceleration, Instance Portal with Cloudflare tunnels
+# OCI compliant - compatible with Docker, Podman, and Buildah
 
 # Stage 1: Get uv from distroless image
 FROM ghcr.io/astral-sh/uv:latest AS uv-source
 
 # Stage 2: Build AWS CLI
-FROM python:3.12-slim AS aws-builder
+FROM docker.io/library/python:3.12-slim AS aws-builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -20,10 +22,14 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
 # Stage 3: Main build
 FROM docker.io/nvidia/cuda:13.0.2-cudnn-runtime-ubuntu24.04 AS main
 
-# Maintainer details
+# OCI-compliant labels for container metadata
+LABEL org.opencontainers.image.title="ComfyUI"
+LABEL org.opencontainers.image.description="ComfyUI image with CUDA 13.0.2, TensorRT, Instance Portal, Cloudflare tunnels for Vast.ai"
 LABEL org.opencontainers.image.source="https://github.com/mlshdev/vast-images"
-LABEL org.opencontainers.image.description="ComfyUI image with CUDA 13.0.2 for Vast.ai"
-LABEL maintainer="mlshdev"
+LABEL org.opencontainers.image.url="https://github.com/mlshdev/vast-images"
+LABEL org.opencontainers.image.authors="mlshdev"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.vendor="mlshdev"
 
 # Environment configuration
 ENV DEBIAN_FRONTEND=noninteractive
@@ -42,6 +48,16 @@ ENV UV_LINK_MODE=copy
 ENV COMFYUI_DIR=/workspace/ComfyUI
 ENV COMFYUI_ARGS="--disable-auto-launch --enable-cors-header --port 18188"
 
+# Instance Portal configuration for vast.ai
+# This enables the Instance Portal with Cloudflare tunnel integration
+ENV TUNNEL_MANAGER="http://localhost:11112"
+ENV CLOUDFLARE_METRICS="localhost:11113"
+
+# Default PORTAL_CONFIG for ComfyUI - configure applications for Instance Portal
+# Format: hostname:external_port:internal_port:path:name
+# external_port != internal_port means Caddy will act as reverse proxy
+ENV PORTAL_CONFIG="localhost:1111:11111:/:Instance Portal|localhost:8188:18188:/:ComfyUI"
+
 # Copy uv binary from distroless image
 COPY --from=uv-source /uv /usr/local/bin/uv
 
@@ -50,8 +66,10 @@ COPY --from=aws-builder /opt/aws-cli /opt/aws-cli
 RUN ln -s /opt/aws-cli/bin/aws /usr/local/bin/aws \
     && ln -s /opt/aws-cli/bin/aws_completer /usr/local/bin/aws_completer
 
-# Install required apt packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install required apt packages with cache mount for faster rebuilds
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     vim \
     wget \
     curl \
@@ -75,8 +93,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rsync \
     zip \
     unzip \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    # Required for portal-aio (Instance Portal)
+    jq \
+    openssl
 
 # Create symlinks for python
 RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 \
@@ -91,26 +110,23 @@ RUN cd /workspace && \
     cd ComfyUI && \
     git checkout master
 
-# Create ComfyUI venv and install PyTorch with CUDA 13.0 nightly
-RUN cd /workspace/ComfyUI && \
+# Create ComfyUI venv and install all Python dependencies in a single layer
+# This optimizes layer caching and reduces build time
+# Set UV_HTTP_TIMEOUT to 300s (5 minutes) for large NVIDIA package downloads
+RUN --mount=type=cache,target=/root/.cache/uv \
+    cd /workspace/ComfyUI && \
     uv venv .venv --python 3.12 && \
     . .venv/bin/activate && \
-    uv pip install --compile-bytecode \
+    # Install PyTorch with CUDA 13.0 nightly
+    UV_HTTP_TIMEOUT=300 uv pip install --compile-bytecode \
         --pre torch torchvision torchaudio \
         --index-url https://download.pytorch.org/whl/nightly/cu130 && \
-    deactivate
-
-# Install TensorRT into the venv
-RUN cd /workspace/ComfyUI && \
-    . .venv/bin/activate && \
-    uv pip install --compile-bytecode \
-        tensorrt \
+    # Install TensorRT (with pre-built native libraries)
+    # The tensorrt packages from pypi.nvidia.com include libnvinfer.so in tensorrt_libs directory
+    UV_HTTP_TIMEOUT=300 uv pip install --compile-bytecode \
+        tensorrt tensorrt-bindings tensorrt-libs \
         --extra-index-url https://pypi.nvidia.com && \
-    deactivate
-
-# Install ComfyUI requirements into the venv
-RUN cd /workspace/ComfyUI && \
-    . .venv/bin/activate && \
+    # Install ComfyUI requirements
     uv pip install --compile-bytecode -r requirements.txt && \
     deactivate
 
@@ -166,16 +182,39 @@ RUN useradd -ms /bin/bash user -u 1001 -g 0 && \
     chown -R user:root /home/user/.ssh
 
 # Create supervisor directories
-RUN mkdir -p /var/log/supervisor /etc/supervisor/conf.d
+RUN mkdir -p /var/log/supervisor /etc/supervisor/conf.d /var/log/portal
+
+# Copy portal-aio components for Instance Portal and Cloudflare tunnel integration
+COPY portal-aio /opt/portal-aio
+
+# Create portal-aio venv and install dependencies
+RUN python3 -m venv /opt/portal-aio/venv && \
+    /opt/portal-aio/venv/bin/pip install --upgrade pip && \
+    /opt/portal-aio/venv/bin/pip install -r /opt/portal-aio/requirements.txt
+
+# Download cloudflared binary for Cloudflare Quick Tunnels
+RUN curl -fsSL -o /opt/portal-aio/tunnel_manager/cloudflared \
+        "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" && \
+    chmod +x /opt/portal-aio/tunnel_manager/cloudflared
+
+# Download latest Caddy binary for reverse proxy
+# Uses GitHub API and jq to get the latest release version dynamically
+RUN CADDY_VERSION=$(curl -fsSL https://api.github.com/repos/caddyserver/caddy/releases/latest | jq -r '.tag_name' | sed 's/^v//') && \
+    test -n "${CADDY_VERSION}" || { echo "Failed to get Caddy version"; exit 1; } && \
+    curl -fsSL -o /tmp/caddy.tar.gz \
+        "https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_amd64.tar.gz" && \
+    tar -xzf /tmp/caddy.tar.gz -C /opt/portal-aio/caddy_manager caddy && \
+    chmod +x /opt/portal-aio/caddy_manager/caddy && \
+    rm -f /tmp/caddy.tar.gz
 
 # Copy supervisor configuration
-COPY supervisord.conf /etc/supervisor/supervisord.conf
-COPY conf.d/ /etc/supervisor/conf.d/
+COPY comfyui/supervisord.conf /etc/supervisor/supervisord.conf
+COPY comfyui/conf.d/ /etc/supervisor/conf.d/
 
 # Copy scripts
-COPY scripts/entrypoint.sh /opt/entrypoint.sh
-COPY scripts/start-comfyui.sh /opt/start-comfyui.sh
-COPY scripts/propagate-ssh-keys.sh /opt/propagate-ssh-keys.sh
+COPY comfyui/scripts/entrypoint.sh /opt/entrypoint.sh
+COPY comfyui/scripts/start-comfyui.sh /opt/start-comfyui.sh
+COPY comfyui/scripts/propagate-ssh-keys.sh /opt/propagate-ssh-keys.sh
 
 RUN chmod +x /opt/entrypoint.sh /opt/start-comfyui.sh /opt/propagate-ssh-keys.sh
 
