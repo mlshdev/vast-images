@@ -107,6 +107,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 \
     && ln -sf /usr/bin/python3.12 /usr/bin/python
 
+# Install TensorRT native libraries from NVIDIA repository
+# Required for onnxruntime-gpu TensorRT execution provider (libnvinfer.so.10)
+RUN curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/3bf863cc.pub | gpg --dearmor -o /usr/share/keyrings/nvidia-cuda-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/nvidia-cuda-keyring.gpg] https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/ /" > /etc/apt/sources.list.d/nvidia-cuda.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libnvinfer10 \
+        libnvinfer-plugin10 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install AWS Mountpoint S3
 RUN wget -O /tmp/mount-s3.deb https://s3.amazonaws.com/mountpoint-s3-release/latest/x86_64/mount-s3.deb \
     && dpkg -i /tmp/mount-s3.deb || apt-get install -f -y \
