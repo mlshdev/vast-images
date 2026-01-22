@@ -20,6 +20,15 @@ cd "${FACEFUSION_DIR}"
 # Activate the virtual environment
 source .venv/bin/activate
 
+# Configure LD_LIBRARY_PATH for TensorRT native libraries
+# The tensorrt-cu12 pip package installs libnvinfer.so.10 and other TensorRT libs
+# into site-packages/tensorrt_libs which must be in LD_LIBRARY_PATH for onnxruntime-gpu
+TENSORRT_LIBS_PATH="${FACEFUSION_DIR}/.venv/lib/python3.12/site-packages/tensorrt_libs"
+if [[ -d "${TENSORRT_LIBS_PATH}" ]]; then
+    export LD_LIBRARY_PATH="${TENSORRT_LIBS_PATH}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+    echo "TensorRT libraries path added: ${TENSORRT_LIBS_PATH}"
+fi
+
 # Wait for provisioning to complete if needed
 # The /.provisioning file is created at boot and removed after provisioning completes
 while [ -f "/.provisioning" ]; do

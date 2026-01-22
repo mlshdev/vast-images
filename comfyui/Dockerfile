@@ -1,5 +1,6 @@
 # Multi-stage Dockerfile for ComfyUI with CUDA 13.0.2
 # Builds custom Docker image for vast.ai cloud platform
+# Features: CUDA + TensorRT acceleration, Instance Portal with Cloudflare tunnels
 
 # Stage 1: Get uv from distroless image
 FROM ghcr.io/astral-sh/uv:latest AS uv-source
@@ -22,7 +23,7 @@ FROM docker.io/nvidia/cuda:13.0.2-cudnn-runtime-ubuntu24.04 AS main
 
 # Maintainer details
 LABEL org.opencontainers.image.source="https://github.com/mlshdev/vast-images"
-LABEL org.opencontainers.image.description="ComfyUI image with CUDA 13.0.2 for Vast.ai"
+LABEL org.opencontainers.image.description="ComfyUI image with CUDA 13.0.2, Instance Portal, Cloudflare tunnels for Vast.ai"
 LABEL maintainer="mlshdev"
 
 # Environment configuration
@@ -41,6 +42,16 @@ ENV UV_LINK_MODE=copy
 # ComfyUI configuration
 ENV COMFYUI_DIR=/workspace/ComfyUI
 ENV COMFYUI_ARGS="--disable-auto-launch --enable-cors-header --port 18188"
+
+# Instance Portal configuration for vast.ai
+# This enables the Instance Portal with Cloudflare tunnel integration
+ENV TUNNEL_MANAGER="http://localhost:11112"
+ENV CLOUDFLARE_METRICS="localhost:11113"
+
+# Default PORTAL_CONFIG for ComfyUI - configure applications for Instance Portal
+# Format: hostname:external_port:internal_port:path:name
+# external_port != internal_port means Caddy will act as reverse proxy
+ENV PORTAL_CONFIG="localhost:1111:11111:/:Instance Portal|localhost:8188:18188:/:ComfyUI"
 
 # Copy uv binary from distroless image
 COPY --from=uv-source /uv /usr/local/bin/uv
@@ -75,6 +86,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rsync \
     zip \
     unzip \
+    # Required for portal-aio (Instance Portal)
+    jq \
+    openssl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -100,11 +114,13 @@ RUN cd /workspace/ComfyUI && \
         --index-url https://download.pytorch.org/whl/nightly/cu130 && \
     deactivate
 
-# Install TensorRT into the venv
+# Install TensorRT (with pre-built native libraries) into the venv
+# The tensorrt package from pypi.nvidia.com includes libnvinfer.so and other TensorRT native libraries
+# Set UV_HTTP_TIMEOUT to 300s (5 minutes) for large NVIDIA package downloads
 RUN cd /workspace/ComfyUI && \
     . .venv/bin/activate && \
-    uv pip install --compile-bytecode \
-        tensorrt \
+    UV_HTTP_TIMEOUT=300 uv pip install --compile-bytecode \
+        tensorrt tensorrt-bindings tensorrt-libs \
         --extra-index-url https://pypi.nvidia.com && \
     deactivate
 
@@ -166,16 +182,36 @@ RUN useradd -ms /bin/bash user -u 1001 -g 0 && \
     chown -R user:root /home/user/.ssh
 
 # Create supervisor directories
-RUN mkdir -p /var/log/supervisor /etc/supervisor/conf.d
+RUN mkdir -p /var/log/supervisor /etc/supervisor/conf.d /var/log/portal
+
+# Copy portal-aio components for Instance Portal and Cloudflare tunnel integration
+COPY portal-aio /opt/portal-aio
+
+# Create portal-aio venv and install dependencies
+RUN python3 -m venv /opt/portal-aio/venv && \
+    /opt/portal-aio/venv/bin/pip install --upgrade pip && \
+    /opt/portal-aio/venv/bin/pip install -r /opt/portal-aio/requirements.txt
+
+# Download cloudflared binary for Cloudflare Quick Tunnels
+RUN curl -fsSL -o /opt/portal-aio/tunnel_manager/cloudflared \
+        "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" && \
+    chmod +x /opt/portal-aio/tunnel_manager/cloudflared
+
+# Download Caddy binary for reverse proxy
+RUN curl -fsSL -o /tmp/caddy.tar.gz \
+        "https://github.com/caddyserver/caddy/releases/download/v2.9.1/caddy_2.9.1_linux_amd64.tar.gz" && \
+    tar -xzf /tmp/caddy.tar.gz -C /opt/portal-aio/caddy_manager caddy && \
+    chmod +x /opt/portal-aio/caddy_manager/caddy && \
+    rm -f /tmp/caddy.tar.gz
 
 # Copy supervisor configuration
-COPY supervisord.conf /etc/supervisor/supervisord.conf
-COPY conf.d/ /etc/supervisor/conf.d/
+COPY comfyui/supervisord.conf /etc/supervisor/supervisord.conf
+COPY comfyui/conf.d/ /etc/supervisor/conf.d/
 
 # Copy scripts
-COPY scripts/entrypoint.sh /opt/entrypoint.sh
-COPY scripts/start-comfyui.sh /opt/start-comfyui.sh
-COPY scripts/propagate-ssh-keys.sh /opt/propagate-ssh-keys.sh
+COPY comfyui/scripts/entrypoint.sh /opt/entrypoint.sh
+COPY comfyui/scripts/start-comfyui.sh /opt/start-comfyui.sh
+COPY comfyui/scripts/propagate-ssh-keys.sh /opt/propagate-ssh-keys.sh
 
 RUN chmod +x /opt/entrypoint.sh /opt/start-comfyui.sh /opt/propagate-ssh-keys.sh
 
