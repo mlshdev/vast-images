@@ -1,12 +1,13 @@
 # Multi-stage Dockerfile for FaceFusion with CUDA 12.9.1
 # Builds custom Docker image for vast.ai cloud platform
 # Features: CUDA + TensorRT acceleration, Instance Portal with Cloudflare tunnels, NSFW detection disabled for research
+# OCI compliant - compatible with Docker, Podman, and Buildah
 
 # Stage 1: Get uv from distroless image
 FROM ghcr.io/astral-sh/uv:latest AS uv-source
 
 # Stage 2: Build AWS CLI
-FROM python:3.12-slim AS aws-builder
+FROM docker.io/library/python:3.12-slim AS aws-builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -21,10 +22,14 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
 # Stage 3: Main build
 FROM docker.io/nvidia/cuda:12.9.1-cudnn-runtime-ubuntu24.04 AS main
 
-# Maintainer details
+# OCI-compliant labels for container metadata
+LABEL org.opencontainers.image.title="FaceFusion"
+LABEL org.opencontainers.image.description="FaceFusion image with CUDA 12.9.1, TensorRT, Instance Portal, Cloudflare tunnels for Vast.ai"
 LABEL org.opencontainers.image.source="https://github.com/mlshdev/vast-images"
-LABEL org.opencontainers.image.description="FaceFusion image with CUDA 12.9.1, Instance Portal, Cloudflare tunnels for Vast.ai"
-LABEL maintainer="mlshdev"
+LABEL org.opencontainers.image.url="https://github.com/mlshdev/vast-images"
+LABEL org.opencontainers.image.authors="mlshdev"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.vendor="mlshdev"
 
 # Environment configuration
 ENV DEBIAN_FRONTEND=noninteractive
@@ -67,8 +72,10 @@ COPY --from=aws-builder /opt/aws-cli /opt/aws-cli
 RUN ln -s /opt/aws-cli/bin/aws /usr/local/bin/aws \
     && ln -s /opt/aws-cli/bin/aws_completer /usr/local/bin/aws_completer
 
-# Install required apt packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install required apt packages with cache mount for faster rebuilds
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     # Required packages from specification
     git-all \
     curl \
@@ -99,9 +106,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fuse3 \
     # Required for portal-aio (Instance Portal)
     jq \
-    openssl \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    openssl
 
 # Create symlinks for python
 RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 \
@@ -134,38 +139,26 @@ RUN cd /workspace/facefusion && \
     # Modify core.py to skip hash verification
     sed -i "s/return all(module.pre_check() for module in common_modules) and content_analyser_hash == 'b14e7b92'/# RESEARCH MODE: Skip hash check for modified content_analyser\n\treturn all(module.pre_check() for module in common_modules)/" facefusion/core.py
 
-# Create FaceFusion venv and install PyTorch with CUDA 12.9 nightly
+# Create FaceFusion venv and install all Python dependencies in a single layer
+# This optimizes layer caching and reduces build time
 # Set UV_HTTP_TIMEOUT to 300s (5 minutes) for large NVIDIA package downloads
-RUN cd /workspace/facefusion && \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    cd /workspace/facefusion && \
     uv venv .venv --python 3.12 && \
     . .venv/bin/activate && \
+    # Install PyTorch with CUDA 12.9 nightly
     UV_HTTP_TIMEOUT=300 uv pip install --compile-bytecode \
         --pre torch torchvision torchaudio \
         --index-url https://download.pytorch.org/whl/nightly/cu129 && \
-    deactivate
-
-# Install TensorRT (CUDA 12 variant with pre-built native libraries) into the venv
-# The tensorrt-cu12 package includes libnvinfer.so.10 and other TensorRT native libraries
-# These are required for onnxruntime-gpu TensorRT execution provider
-# Set UV_HTTP_TIMEOUT to 300s (5 minutes) for large NVIDIA package downloads
-RUN cd /workspace/facefusion && \
-    . .venv/bin/activate && \
+    # Install TensorRT (CUDA 12 variant with pre-built native libraries)
+    # The tensorrt-cu12 package includes libnvinfer.so.10 for onnxruntime-gpu TensorRT execution provider
     UV_HTTP_TIMEOUT=300 uv pip install --compile-bytecode \
         tensorrt-cu12 tensorrt-cu12-bindings tensorrt-cu12-libs \
         --extra-index-url https://pypi.nvidia.com && \
-    deactivate
-
-# Install onnxruntime-gpu for CUDA acceleration
-# Set UV_HTTP_TIMEOUT to 300s (5 minutes) for large NVIDIA package downloads
-RUN cd /workspace/facefusion && \
-    . .venv/bin/activate && \
+    # Install onnxruntime-gpu for CUDA acceleration
     UV_HTTP_TIMEOUT=300 uv pip install --compile-bytecode \
         onnxruntime-gpu==1.23.2 && \
-    deactivate
-
-# Install FaceFusion requirements into the venv (excluding onnxruntime since we install GPU version)
-RUN cd /workspace/facefusion && \
-    . .venv/bin/activate && \
+    # Install FaceFusion requirements (excluding onnxruntime since we install GPU version)
     uv pip install --compile-bytecode \
         gradio-rangeslider==0.0.8 \
         gradio==5.44.1 \
@@ -272,9 +265,11 @@ RUN curl -fsSL -o /opt/portal-aio/tunnel_manager/cloudflared \
         "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64" && \
     chmod +x /opt/portal-aio/tunnel_manager/cloudflared
 
-# Download Caddy binary for reverse proxy
-RUN curl -fsSL -o /tmp/caddy.tar.gz \
-        "https://github.com/caddyserver/caddy/releases/download/v2.9.1/caddy_2.9.1_linux_amd64.tar.gz" && \
+# Download latest Caddy binary for reverse proxy
+# Uses GitHub API to get the latest release version dynamically
+RUN CADDY_VERSION=$(curl -s https://api.github.com/repos/caddyserver/caddy/releases/latest | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/') && \
+    curl -fsSL -o /tmp/caddy.tar.gz \
+        "https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_amd64.tar.gz" && \
     tar -xzf /tmp/caddy.tar.gz -C /opt/portal-aio/caddy_manager caddy && \
     chmod +x /opt/portal-aio/caddy_manager/caddy && \
     rm -f /tmp/caddy.tar.gz
